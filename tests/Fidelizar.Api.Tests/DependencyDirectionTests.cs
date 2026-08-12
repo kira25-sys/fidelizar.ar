@@ -74,6 +74,32 @@ public class DependencyDirectionTests
         Assert.Equal(["Fidelizar.Shared"], declaredReferences);
     }
 
+    /// <summary>
+    /// The other half of the §3 diagram, and the one that had already drifted: the arrows run
+    /// <c>Api → Application → Domain</c> and <c>Api → Infrastructure → Domain</c>. There is no
+    /// arrow from <c>Infrastructure</c> to <c>Application</c>. An unused reference is still a
+    /// breach of the contract — it is exactly what lets a repository start calling a use case
+    /// later, at which point the cycle is load-bearing and expensive to undo.
+    /// </summary>
+    [Theory]
+    [InlineData("Fidelizar.Application", new[] { "Fidelizar.Domain" })]
+    [InlineData("Fidelizar.Infrastructure", new[] { "Fidelizar.Domain" })]
+    [InlineData("Fidelizar.Shared", new string[0])]
+    public void Csproj_declares_only_the_project_references_ARCHITECTURE_allows(
+        string project,
+        string[] allowed)
+    {
+        var csprojPath = FindSolutionRoot("src", project, $"{project}.csproj");
+
+        var declaredReferences = XDocument.Load(csprojPath)
+            .Descendants("ProjectReference")
+            .Select(e => Path.GetFileNameWithoutExtension((string)e.Attribute("Include")!))
+            .Order()
+            .ToArray();
+
+        Assert.Equal(allowed.Order().ToArray(), declaredReferences);
+    }
+
     private static string FindSolutionRoot(params string[] relativePathFromRoot)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

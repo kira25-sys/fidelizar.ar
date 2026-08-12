@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Fidelizar.Domain\Fidelizar.Domain.csproj" />
-    <ProjectReference Include="..\Fidelizar.Application\Fidelizar.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>

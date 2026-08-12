@@ -1,5 +1,8 @@
 using Fidelizar.Api.Configurations;
 using Fidelizar.Api.Middleware;
+using Fidelizar.Infrastructure.Configurations;
+using Fidelizar.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Serilog;
 
 namespace Fidelizar.Api;
@@ -25,9 +28,34 @@ public class Program
             builder.AddSerilogConfiguration();
             builder.Services.AddAppHealthChecks();
             builder.Services.AddAppRateLimiting(builder.Configuration);
+            builder.Services.AddInfrastructureConfiguration(builder.Configuration);
+            builder.Services.AddApplicationServices();
             builder.Services.AddControllers();
 
             var app = builder.Build();
+
+            // ARCHITECTURE §14: EF Core migrations run on container start, and a failed
+            // migration aborts the start and leaves the previous version serving — never a half
+            // migrated database answering questions about money. There is no inner try/catch on
+            // purpose: a failure here falls through to the outer catch below, which logs it as
+            // fatal and rethrows, so the process exits without ever calling RunAsync().
+            //
+            // When EF Core design-time tooling (e.g. "dotnet ef migrations add") spins this host
+            // up just to read its services, builder.Build() throws HostAbortedException before
+            // execution reaches this point, so a migration never runs during that.
+            //
+            // Skipped only in the "Testing" hosting environment: Fidelizar.Api.Tests'
+            // RateLimiterPipelineTests (F0-06b) boots the real pipeline through
+            // WebApplicationFactory to prove the limiter is actually wired in, and CI has no
+            // Postgres to migrate against. Development, Staging and Production always migrate.
+            if (!app.Environment.IsEnvironment("Testing"))
+            {
+                await using var migrationScope = app.Services.CreateAsyncScope();
+                var dbContext = migrationScope.ServiceProvider.GetRequiredService<FidelizarDbContext>();
+                Log.Information("Aplicando migraciones de EF Core");
+                await dbContext.Database.MigrateAsync();
+                Log.Information("Migraciones de EF Core aplicadas");
+            }
 
             app.UseSerilogRequestLogging();
 

@@ -1,0 +1,46 @@
+# Example only — copy to the server as .env and fill in every CAMBIAR_ESTO.
+# The real .env never enters the repository and is never read by an agent (CLAUDE.md).
+#
+# .NET reads nested configuration keys with a double underscore as the separator:
+# ConnectionStrings__DefaultConnection sets ConnectionStrings:DefaultConnection.
+
+# ---------------------------------------------------------------------------
+# Mandatory. The application refuses to start without these.
+# ---------------------------------------------------------------------------
+
+# Where the ledger lives. The API fails at startup with a clear message if it is missing,
+# rather than throwing on the first request that touches a balance.
+ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=CAMBIAR_ESTO;Username=CAMBIAR_ESTO;Password=CAMBIAR_ESTO
+
+# Must match the db service in compose.yml.
+POSTGRES_DB=CAMBIAR_ESTO
+POSTGRES_USER=CAMBIAR_ESTO
+POSTGRES_PASSWORD=CAMBIAR_ESTO
+
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_HTTP_PORTS=8080
+
+# ---------------------------------------------------------------------------
+# Authentication — arrives with F1-03. The exact variable names are fixed there;
+# this block is a placeholder so nobody is surprised by it on the first deploy.
+# ---------------------------------------------------------------------------
+
+# Generate it ON THE SERVER and nowhere else:
+#     openssl rand -base64 48
+#
+# It is never committed, not even to a development settings file: a key that touches git is in
+# the history forever and is burned (ARCHITECTURE §8). The application validates it at startup —
+# a missing or short key stops the boot instead of failing on the first login.
+# Jwt__SigningKey=CAMBIAR_ESTO
+
+# ---------------------------------------------------------------------------
+# Notes
+# ---------------------------------------------------------------------------
+#
+# - There is no variable pointing at a client's point-of-sale database, and there never will be.
+#   Sales arrive by file import or by API, never by a direct connection (invariant I9).
+#
+# - Every business gets its own .env, its own database and its own container (ARCHITECTURE §5).
+#   Do not reuse a password across businesses: the isolation is the point.
+#
+# - Nothing in this file belongs in a screenshot, a chat message or a support ticket.

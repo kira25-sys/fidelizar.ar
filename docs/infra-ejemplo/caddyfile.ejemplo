@@ -1,0 +1,33 @@
+# Example only — copy to the server as Caddyfile and fill in every CAMBIAR_ESTO.
+# Caddy obtains and renews the TLS certificate on its own; there is nothing to configure for it.
+
+CAMBIAR_ESTO.fidelizar.ar {
+	# The API serves the compiled WebAssembly client from its own origin, so there is exactly
+	# one upstream and no CORS anywhere (ARCHITECTURE §3).
+	reverse_proxy api:8080
+
+	encode gzip zstd
+
+	header {
+		# The counter tablet's browser holds a session cookie for a system that moves money.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	log {
+		output file /var/log/caddy/CAMBIAR_ESTO.log {
+			roll_size 10MB
+			roll_keep 10
+		}
+	}
+}
+
+# One site block per business, each pointing at that business's own container
+# (ARCHITECTURE §5). Copy the block above, change the domain and the upstream name.
+#
+# otra-empresa.fidelizar.ar {
+# 	reverse_proxy api-otra-empresa:8080
+# }

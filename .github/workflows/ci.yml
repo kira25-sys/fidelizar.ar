@@ -1,0 +1,29 @@
+name: CI
+
+# ARCHITECTURE §14: a red build is not merged. Runs on every push and every pull request, no
+# branch filter — a broken build on any branch should be visible before it reaches a PR.
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore Fidelizar.sln
+
+      - name: Build
+        run: dotnet build Fidelizar.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test Fidelizar.sln --no-build --configuration Release --logger "console;verbosity=normal"

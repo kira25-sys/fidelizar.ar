@@ -6,4 +6,15 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!--
+      MovimientoCredito.FijarSaldoResultante is internal: only the EF repository implementation
+      in Fidelizar.Infrastructure may set the I2 historical-evidence field, and only inside the
+      same transaction as the insert. Domain.Tests gets the same visibility so the invariant
+      itself can be unit-tested with no database (ARCHITECTURE §3, §11).
+    -->
+    <InternalsVisibleTo Include="Fidelizar.Infrastructure" />
+    <InternalsVisibleTo Include="Fidelizar.Domain.Tests" />
+  </ItemGroup>
+
 </Project>

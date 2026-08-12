@@ -30,6 +30,10 @@ public sealed class MovimientoRepository(FidelizarDbContext dbContext) : IMovimi
             .Where(m => m.NegocioId == negocioId && m.Periodo == periodo)
             .ToListAsync(cancellationToken);
 
+    public Task<bool> TieneMovimientosAsync(int negocioId, int miembroId, CancellationToken cancellationToken = default) =>
+        dbContext.MovimientosCredito
+            .AnyAsync(m => m.NegocioId == negocioId && m.MiembroId == miembroId, cancellationToken);
+
     public async Task<MovimientoCredito> AppendAsync(
         MovimientoCredito movimiento, CancellationToken cancellationToken = default)
     {

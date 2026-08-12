@@ -1,4 +1,5 @@
 using Fidelizar.Domain.Repositories;
+using Fidelizar.Infrastructure.Import;
 using Fidelizar.Infrastructure.Persistence;
 using Fidelizar.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -31,6 +32,11 @@ public static class InfrastructureConfigurationExtensions
 
         services.AddScoped<IMovimientoRepository, MovimientoRepository>();
         services.AddScoped<ICorteRepository, CorteRepository>();
+        services.AddScoped<IMiembroRepository, MiembroRepository>();
+
+        // The padron importer (F0-08) is the entry door for every new business. It only depends
+        // on Domain repository interfaces, registered just above.
+        services.AddScoped<VipPadronImporter>();
 
         return services;
     }

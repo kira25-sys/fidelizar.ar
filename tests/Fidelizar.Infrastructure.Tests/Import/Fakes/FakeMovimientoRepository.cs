@@ -1,13 +1,14 @@
 using Fidelizar.Domain.Entities;
 using Fidelizar.Domain.Repositories;
 
-namespace Fidelizar.Application.Tests.Fakes;
+namespace Fidelizar.Infrastructure.Tests.Import.Fakes;
 
 /// <summary>
-/// In-memory stand-in for <see cref="IMovimientoRepository"/> so <c>Fidelizar.Application.Tests</c>
-/// runs with no database (ARCHITECTURE §11). Mirrors the real repository's shape exactly — no
-/// Update, no Delete (I1) — and computes the balance the same way the real one must:
-/// <c>SUM(Monto)</c>, never a stored column (I2).
+/// In-memory stand-in for <see cref="IMovimientoRepository"/>, local to the importer tests
+/// (ARCHITECTURE §11). Mirrors <c>Fidelizar.Application.Tests.Fakes.FakeMovimientoRepository</c>
+/// — duplicated rather than shared, since each test project stays close to its own layer and
+/// there is no shared test-support package between them (same reasoning as "no shared package
+/// with Octaviano", Plan §1, applied one level down).
 /// </summary>
 public sealed class FakeMovimientoRepository : IMovimientoRepository
 {

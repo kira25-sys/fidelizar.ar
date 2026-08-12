@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Fidelizar.Application\Fidelizar.Application.csproj" />
+    <ProjectReference Include="..\Fidelizar.Infrastructure\Fidelizar.Infrastructure.csproj" />
+    <ProjectReference Include="..\Fidelizar.Shared\Fidelizar.Shared.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

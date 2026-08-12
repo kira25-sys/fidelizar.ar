@@ -80,7 +80,7 @@ found and fixed before anything in phase 1 begins.
 
 ## Phase 2 — Ticket line ingestion ⭐
 
-> **Gate:** "what did Diana buy in the last 6 months, product by product" can be answered.
+> **Gate:** "what did Juana buy in the last 6 months, product by product" can be answered.
 > **This is where the product actually begins.**
 
 | # | Task | Role | Depends on |

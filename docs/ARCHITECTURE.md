@@ -350,7 +350,7 @@ negotiable (Plan §10).
 | --- | --- |
 | **0 — Foundations** | The 293 members and their entire ledger are in Postgres and every balance matches the current system **to the peso**. Without that verification, nothing advances |
 | **1 — Counter web** | The 5 branches operate through the web and the VIP bot is no longer used to redeem |
-| **2 — Ticket lines** ⭐ | "What did Diana buy in the last 6 months, product by product" can be answered |
+| **2 — Ticket lines** ⭐ | "What did Juana buy in the last 6 months, product by product" can be answered |
 | **3 — Member profile** | Diet, allergies, preferences, birthdays, cashier notes; member self-service form |
 | **4 — Intelligence** | Habits, churn alerts on the cashier's screen, owner reports |
 | **5 — Product** | Onboarding a new business without touching code; second POS adapter; WhatsApp premium |

@@ -29,7 +29,7 @@ The manager's and owner's screens invert this: used sitting down, density beats 
 - **Flow specifications** per screen, covering the unhappy paths: no results, two homonyms,
   amount above balance, stale data, no consent on record, no network.
 - **Wording**, in Spanish (Argentina). An error a cashier can act on beats an error that is
-  technically precise. "El canje ($15.000) es mayor que el saldo de Diana ($12.400)" is useful;
+  technically precise. "El canje ($15.000) es mayor que el saldo de Juana ($12.400)" is useful;
   "Operación inválida" is not.
 - **Accessibility**: contrast, focus order, labels, targets no smaller than 44×44 px.
 

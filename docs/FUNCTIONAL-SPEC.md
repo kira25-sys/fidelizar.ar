@@ -86,7 +86,7 @@ The screen the customer can see over the cashier's shoulder. Everything on it is
 
 ```
 ┌──────────────────────────────────────────────┐
-│  Diana Gómez                    Socia #0142  │
+│  Juana Pérez                    Socia #0142  │
 │                                              │
 │      SALDO DISPONIBLE                        │
 │      $ 12.400                                │

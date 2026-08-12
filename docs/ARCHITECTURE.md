@@ -442,7 +442,7 @@ the same plumbing problems this product has, and that work is not worth redoing.
 | Serilog with rolling file + retention | Satisfies §14's logging requirement |
 | Health check endpoint | The uptime monitor of §14 needs a target |
 | Rate limiting on login | Needed here too — see §8 |
-| ASP.NET Core Identity setup | Password policy, roles, EF stores. Keep Identity's tables in their own `DbContext`, separate from the domain schema |
+| ASP.NET Core Identity setup | **Arrives with F1-03, not with the phase 0 plumbing.** Password policy, roles, EF stores. Keep Identity's tables in their own `DbContext`, separate from the domain schema |
 | Policy and role name constants | Avoids magic strings in `[Authorize]` |
 
 **Not ported, and why:**

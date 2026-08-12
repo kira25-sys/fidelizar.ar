@@ -297,11 +297,6 @@ internet; without a limit it is a free brute-force target. Verify the limiter is
 pipeline, not merely registered in DI — a rate limiter configured but never added to the request
 pipeline protects nothing while looking like it does.
 
-**Authorisation is decided server-side, on every endpoint** (Plan §5). The client hides what a
-role cannot use, but hiding a button is a courtesy, not a control: an endpoint must reject a
-cashier asking for a phone number even when no screen offers it. The permission matrix tests
-(ROADMAP F1-15) run against the API, not against the UI.
-
 ## 9. Personal and sensitive data
 
 Diet and allergies are health data. Argentine Law 25.326 classifies them as sensitive and

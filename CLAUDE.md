@@ -77,10 +77,22 @@ verified, and stops there.
 These are blocked at the permission layer too, but the rule is yours to respect regardless:
 
 - `.env` and any environment file holding real values
-- `docker-compose.yml`, `compose.yml`, `Dockerfile`, `.dockerignore`, `Caddyfile`
+- **Environment variables holding real values** — never set, export, echo, or write one, and
+  never read a secret out of one into a file, a log, a commit or a report
 - `appsettings.Production.json`, certificates (`*.pfx`, `*.pem`, `*.key`), anything under a
   `secrets/` directory
 - Real customer data: member rosters, sales exports, database dumps
+
+**Container and proxy definitions are not on this list** (decided by the owner 2026-08-13).
+`docker-compose.yml`, `compose.yml`, `Dockerfile`, `.dockerignore` and `Caddyfile` may be read,
+written and run. They describe *how services are wired*, which is ordinary engineering work and
+is reviewable in a diff. What made them dangerous was never the YAML — it was the secrets people
+paste into it.
+
+So the line moved, it did not disappear: **a container definition must reference every secret,
+never contain one.** `POSTGRES_PASSWORD: ${FIDELIZAR_GATE_PG_PASSWORD}` is fine; the password
+itself typed into the file is not, and neither is inventing a plausible-looking default so a
+command runs unattended. The owner supplies the values; the file only names them.
 
 **What you may do instead:** write documented example files under
 [docs/infra-ejemplo/](docs/infra-ejemplo/), with names that cannot be mistaken for the real

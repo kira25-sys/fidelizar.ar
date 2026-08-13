@@ -1,0 +1,43 @@
+# Local Postgres for the phase 0 gate (ROADMAP F0-11) and for the restore drill that reuses the
+# same harness later (F0-15). Development only — this is not the production stack, and nothing
+# here is deployed anywhere.
+#
+# Defaults match Fidelizar.VerificacionGate's own defaults (port 5433, database fidelizar_gate,
+# user postgres) so the harness runs without extra flags.
+#
+# CLAUDE.md: a container definition references secrets, it never contains them. The password is
+# read from FIDELIZAR_GATE_PG_PASSWORD in the owner's environment — the same variable the
+# harness itself requires — and there is deliberately no default. Compose fails with a clear
+# error when it is unset, which is the correct outcome: a database holding 293 real members'
+# balances must not come up under a password that a tool invented.
+#
+#   $env:FIDELIZAR_GATE_PG_PASSWORD = "..."      # PowerShell, in the owner's session only
+#   docker compose -f compose.gate.yml up -d
+#
+# To start over from an empty database (the restore drill requires this — a reused volume
+# proves nothing):
+#
+#   docker compose -f compose.gate.yml down -v
+
+services:
+  gate-db:
+    image: postgres:17
+    container_name: fidelizar-gate-db
+    environment:
+      POSTGRES_DB: fidelizar_gate
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${FIDELIZAR_GATE_PG_PASSWORD:?set FIDELIZAR_GATE_PG_PASSWORD in your environment first}
+    ports:
+      - "5433:5432"
+    volumes:
+      - gate-data:/var/lib/postgresql/data
+    healthcheck:
+      # The harness connects the moment the port opens, but Postgres accepts TCP before it is
+      # ready to serve. Without this the migration can fail on a race that looks like a bug.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fidelizar_gate"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  gate-data:

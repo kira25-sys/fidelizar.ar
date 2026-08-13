@@ -44,7 +44,7 @@ screen work proceed without waiting on each other.
 **F0-11 is the gate.** It is not a formality: if one balance is off by one peso, the cause is
 found and fixed before anything in phase 1 begins.
 
-> **F0-09 and F0-11 are the only tasks in the whole roadmap allowed to read real member data**
+> **F0-09, F0-11 and F0-15 are the only tasks in the whole roadmap allowed to read real member data**
 > (CLAUDE.md, "the one exception"). Read-only, and nothing personal is ever written down:
 > discrepancies are reported by `ClienteExternoId`, never by name, phone or DNI, and test
 > fixtures are invented data. Any other task that seems to need this data is a task that is

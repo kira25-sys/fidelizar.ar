@@ -93,14 +93,17 @@ invent a connection string, a credential, or a sample member list that looks rea
 
 ### The one exception: phase 0 migration and verification
 
-Decided by the owner 2026-08-12. **F0-09 and F0-11 may read
+Decided by the owner 2026-08-12, extended to F0-15 the same day. **F0-09, F0-11 and F0-15 may read
 `../../Botquery-Pizarra/data/octaviano.db` and the spreadsheets under
 `../../Botquery-Pizarra/vip-padron/`.** Those two tasks cannot exist otherwise: they migrate the
 293 real members and verify their balances to the peso.
 
 The exception is narrow and does not widen on its own:
 
-- **Only F0-09 and F0-11.** No other task reads real member data, in any phase, for any reason.
+- **Only F0-09, F0-11 and F0-15.** No other task reads real member data, in any phase, for any
+  reason. F0-15 is on the list because a restore drill that does not re-verify the restored
+  balances against the original sources proves only that the file could be loaded, not that the
+  backup is worth having.
 - **Read-only**, like everything under `Botquery-Pizarra`.
 - **Nothing personal is ever written down.** Not in a commit, not in a test fixture, not in a
   document, not in a log, not in a report. Discrepancy reports identify a member by

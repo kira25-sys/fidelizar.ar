@@ -22,6 +22,8 @@ public sealed class FidelizarDbContext(DbContextOptions<FidelizarDbContext> opti
 
     public DbSet<ConfiguracionPrograma> ConfiguracionesPrograma => Set<ConfiguracionPrograma>();
 
+    public DbSet<Consentimiento> Consentimientos => Set<Consentimiento>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FidelizarDbContext).Assembly);

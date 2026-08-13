@@ -1,0 +1,69 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Edit(**/.env)",
+      "Edit(**/.env.*)",
+      "Write(./.env)",
+      "Write(./.env.*)",
+      "Write(**/.env)",
+      "Write(**/.env.*)",
+
+      "Read(./docker-compose.yml)",
+      "Read(./docker-compose.yaml)",
+      "Read(./docker-compose.*.yml)",
+      "Read(./compose.yml)",
+      "Read(./compose.yaml)",
+      "Read(./Dockerfile)",
+      "Read(./.dockerignore)",
+      "Read(./Caddyfile)",
+      "Edit(./docker-compose.yml)",
+      "Edit(./docker-compose.yaml)",
+      "Edit(./docker-compose.*.yml)",
+      "Edit(./compose.yml)",
+      "Edit(./compose.yaml)",
+      "Edit(./Dockerfile)",
+      "Edit(./.dockerignore)",
+      "Edit(./Caddyfile)",
+      "Write(./docker-compose.yml)",
+      "Write(./docker-compose.yaml)",
+      "Write(./docker-compose.*.yml)",
+      "Write(./compose.yml)",
+      "Write(./compose.yaml)",
+      "Write(./Dockerfile)",
+      "Write(./.dockerignore)",
+      "Write(./Caddyfile)",
+
+      "Read(**/appsettings.Production.json)",
+      "Read(**/appsettings.*.Production.json)",
+      "Read(**/secrets/**)",
+      "Read(**/*.pfx)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Edit(**/appsettings.Production.json)",
+      "Edit(**/secrets/**)",
+      "Write(**/appsettings.Production.json)",
+      "Write(**/secrets/**)",
+
+      "Edit(../../Botquery-Pizarra/**)",
+      "Write(../../Botquery-Pizarra/**)",
+      "Edit(./docs/Plan-fidelizacion.md)",
+      "Write(./docs/Plan-fidelizacion.md)",
+
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git checkout main:*)"
+    ],
+    "additionalDirectories": [
+      "../../Botquery-Pizarra"
+    ]
+  }
+}

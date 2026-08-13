@@ -30,6 +30,12 @@ public class Program
             builder.Services.AddAppRateLimiting(builder.Configuration);
             builder.Services.AddInfrastructureConfiguration(builder.Configuration);
             builder.Services.AddApplicationServices();
+
+            // ARCHITECTURE §8: throws here, before the host is built, if the signing key is
+            // missing or too short — the app never starts rather than failing on the first login.
+            builder.Services.AddAppAuthentication(builder.Configuration);
+            builder.Services.AddAppAntiforgery();
+
             builder.Services.AddControllers();
 
             var app = builder.Build();
@@ -66,14 +72,21 @@ public class Program
 
             app.UseRouting();
 
-            // Early in the pipeline so it catches anything thrown by routing, rate limiting, or
-            // a controller further down the chain.
+            // Early in the pipeline so it catches anything thrown by routing, rate limiting,
+            // authentication, or a controller further down the chain.
             app.UseMiddleware<ExceptionHandlingMiddleware>();
 
             // Must be in the request pipeline, not just registered in DI (ARCHITECTURE §8) — a
             // rate limiter that is only configured via AddAppRateLimiting but never reaches
             // UseRateLimiter() protects nothing while looking like it does.
             app.UseRateLimiter();
+
+            // ARCHITECTURE §8: reads the JWT from the auth cookie (AddAppAuthentication's
+            // OnMessageReceived) and populates HttpContext.User; UseAuthorization enforces
+            // [Authorize]/policies below it. Antiforgery validation itself runs per-endpoint via
+            // Security.RequireAntiforgeryTokenAttribute, not as global middleware here.
+            app.UseAuthentication();
+            app.UseAuthorization();
 
             app.MapControllers();
             app.MapHealthChecks("/health");

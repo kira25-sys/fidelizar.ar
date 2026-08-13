@@ -16,6 +16,14 @@ namespace Fidelizar.Api.Configurations;
 /// </summary>
 public static class RateLimitingConfigurationExtensions
 {
+    /// <summary>
+    /// The named policy <c>AuthController.Login</c> opts into with
+    /// <c>[EnableRateLimiting(LoginPolicyName)]</c> (F1-03, ARCHITECTURE §8: "Login endpoints are
+    /// rate-limited"). Stacks with <see cref="AddAppRateLimiting"/>'s global limiter rather than
+    /// replacing it — both must allow a request through.
+    /// </summary>
+    public const string LoginPolicyName = "login";
+
     private const string LoggerCategory = "Fidelizar.Api.RateLimiting";
 
     public static IServiceCollection AddAppRateLimiting(this IServiceCollection services, IConfiguration configuration)
@@ -34,6 +42,18 @@ public static class RateLimitingConfigurationExtensions
                         PermitLimit = settings.PermitLimit,
                         Window = TimeSpan.FromSeconds(settings.WindowSeconds),
                         QueueLimit = settings.QueueLimit,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        AutoReplenishment = true,
+                    }));
+
+            options.AddPolicy(LoginPolicyName, context =>
+                RateLimitPartition.GetFixedWindowLimiter(
+                    GetPartitionKey(context),
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = settings.Login.PermitLimit,
+                        Window = TimeSpan.FromSeconds(settings.Login.WindowSeconds),
+                        QueueLimit = settings.Login.QueueLimit,
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                         AutoReplenishment = true,
                     }));

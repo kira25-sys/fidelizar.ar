@@ -37,7 +37,7 @@ screen work proceed without waiting on each other.
 | F0-10 | **Invariant test suite** — one test per invariant I1–I10 in ARCHITECTURE §4 | QA-D | F0-06 |
 | F0-11 | **Peso-by-peso verification harness — three-way**: for every member, the balance computed in Postgres vs the one Octaviano returns today from its own `VipSaldoService` vs `vip-padron/VIP-CLUB-puntos.xlsx`. Reports every discrepancy **by `ClienteExternoId`, never by name** | QA-D | F0-09 |
 | F0-12 | Example infrastructure files under `docs/infra-ejemplo/` (compose, Caddy, environment variables), with obvious placeholders | BE | F0-03 |
-| F0-13 | CI: GitHub Actions running `dotnet build` and `dotnet test` on every push and PR (ARCHITECTURE §14) | BE | F0-01 |
+| F0-13 | CI: GitHub Actions running `dotnet build` and `dotnet test` on every push, on every branch — **on `push` only, so a PR gets one check and not two** (ARCHITECTURE §14) | BE | F0-01 |
 | F0-14 | Migrations run on container start; a failed migration aborts the start and leaves the previous version serving (ARCHITECTURE §14) | BE | F0-03 |
 | F0-15 | **Restore drill**: restore a backup into a clean database and verify balances against the source. Repeated periodically afterwards | QA-D | F0-11 |
 

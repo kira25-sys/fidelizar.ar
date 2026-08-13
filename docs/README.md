@@ -95,3 +95,4 @@ All of the below were decided 2026-08-12 unless noted.
 | `Rol` identifier | `Dueno`, no `ñ`. "Dueño" is UI text only | DATA-MODEL §2 |
 | Real member data | Readable **only** by F0-09 and F0-11, read-only, nothing personal ever written down | CLAUDE.md |
 | Phase 0 gate | **Three-way** balance comparison: Postgres vs Octaviano vs the owner's spreadsheet | ROADMAP phase 0 |
+| CI trigger | **`push` only, not `pull_request`** — one check per commit instead of two. The owner reviews and merges every PR by hand (decided 2026-08-13) | ARCHITECTURE §14 |

@@ -134,6 +134,26 @@ public sealed class SqliteOctavianoSource(string rutaBaseDatos) : IOctavianoSour
         return resultado;
     }
 
+    public async Task<OctavianoCorte?> LeerCorteAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = AbrirConexionSoloLectura();
+        await using var comando = connection.CreateCommand();
+        // VipCortes is a one-row table by Octaviano's own design (see its migration's comment);
+        // ORDER BY Id LIMIT 1 is defensive, not a real filter.
+        comando.CommandText = "SELECT Id, Fecha, ActualizadoEn FROM VipCortes ORDER BY Id LIMIT 1;";
+
+        await using var lector = await comando.ExecuteReaderAsync(cancellationToken);
+        if (!await lector.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new OctavianoCorte(
+            Id: lector.GetInt32(0),
+            Fecha: LeerFecha(lector, 1),
+            ActualizadoEn: LeerFechaHora(lector, 2));
+    }
+
     private static string? LeerTextoNullable(SqliteDataReader lector, int ordinal) =>
         lector.IsDBNull(ordinal) ? null : lector.GetString(ordinal);
 

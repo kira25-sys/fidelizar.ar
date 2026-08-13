@@ -35,6 +35,16 @@ namespace Fidelizar.MigracionOctaviano.Migracion;
 /// safety net DATA-MODEL §4 already provides, and every append is still wrapped so one bad row
 /// cannot silently corrupt the rest.
 /// </para>
+///
+/// <para>
+/// <b>No business-rule number is a literal here.</b> ARCHITECTURE §6 forbids writing RN-01's
+/// accrual percentage or RN-06's monthly target inline in code —
+/// <see cref="EjecutarAsync"/> takes both as parameters, and <c>Program.cs</c> is the one place
+/// that reads them (<c>--porcentaje-acumulacion</c>, <c>--objetivo-mensual</c>), required and
+/// with no default, the same way <c>Corte</c> is not a constant either (F0-07). Octaviano's own
+/// cutoff (<c>VipCortes</c>) is migrated the same way <c>VipPadronImporter</c> would declare one:
+/// once, never overwritten on a mismatch.
+/// </para>
 /// </summary>
 public sealed class MigradorOctaviano(
     IOctavianoSource origen,
@@ -42,22 +52,33 @@ public sealed class MigradorOctaviano(
     IConfiguracionProgramaRepository configuracionRepository,
     IMiembroRepository miembroRepository,
     IMovimientoRepository movimientoRepository,
-    IConsentimientoRepository consentimientoRepository)
+    IConsentimientoRepository consentimientoRepository,
+    ICorteRepository corteRepository)
 {
-    // RN-01 (BUSINESS-RULES.md): 3% of every paid sale, no threshold condition. Same value as
-    // Octaviano's own Octaviano.Core.Services.VipReglas.PorcentajeAcumulacion — this migration
-    // seeds Fidelizar's versioned ConfiguracionPrograma with the number the 293 members' history
-    // was actually computed under, not a fresh guess (DATA-MODEL §1).
-    private const decimal PorcentajeAcumulacionHistorico = 0.03m;
-
-    // RN-06 (BUSINESS-RULES.md): monthly target, accumulated across every branch.
-    private const decimal ObjetivoMensualHistorico = 120_000m;
+    // Usuario es F1-03 y todavía no existe (igual que MovimientoCredito.UsuarioId en el resto
+    // del código ya portado). 0 representa "migración F0-09", no un usuario real — usado tanto
+    // para ConfiguracionPrograma.CreadoPorUsuarioId como para Corte.DeclaradoPorUsuarioId.
+    private const int UsuarioPlaceholderMigracion = 0;
 
     private const string TextoConsentimientoMigracion =
         "Consentimiento verbal registrado al momento del alta como socio del club, migrado desde " +
         "Octaviano (DATA-MODEL §7, F0-09). No hay un formulario digital anterior que citar como versión.";
 
-    public async Task<ResultadoMigracion> EjecutarAsync(DateTime ahoraUtc, CancellationToken cancellationToken = default)
+    /// <param name="porcentajeAcumulacion">
+    /// RN-01's percentage (ARCHITECTURE §6: "Accrual percentage → per-business configuration").
+    /// A business rule number, so it is never a literal in this tool's own code — it is the
+    /// caller's job (Program.cs's <c>--porcentaje-acumulacion</c>) to supply it, exactly like
+    /// <c>Corte</c> is not a constant either (F0-07).
+    /// </param>
+    /// <param name="objetivoMensual">
+    /// RN-06's monthly target, or null when the program has none — <c>ObjetivoMensual</c> is
+    /// nullable on purpose (DATA-MODEL §1).
+    /// </param>
+    public async Task<ResultadoMigracion> EjecutarAsync(
+        decimal porcentajeAcumulacion,
+        decimal? objetivoMensual,
+        DateTime ahoraUtc,
+        CancellationToken cancellationToken = default)
     {
         var negocio = await ObtenerOCrearNegocioAsync(ahoraUtc, cancellationToken);
 
@@ -65,7 +86,10 @@ public sealed class MigradorOctaviano(
         var movimientosOctaviano = await origen.LeerMovimientosAsync(cancellationToken);
 
         var configuracion = await ObtenerOCrearConfiguracionAsync(
-            negocio.Id, miembrosOctaviano, movimientosOctaviano, ahoraUtc, cancellationToken);
+            negocio.Id, porcentajeAcumulacion, objetivoMensual, miembrosOctaviano, movimientosOctaviano,
+            ahoraUtc, cancellationToken);
+
+        var (corteFecha, corteAdvertencia) = await MigrarCorteAsync(negocio.Id, ahoraUtc, cancellationToken);
 
         var (miembrosCreados, miembrosYaExistian, miembrosSalteados, mapaMiembros) =
             await MigrarMiembrosAsync(negocio.Id, miembrosOctaviano, ahoraUtc, cancellationToken);
@@ -79,6 +103,8 @@ public sealed class MigradorOctaviano(
         return new ResultadoMigracion(
             NegocioId: negocio.Id,
             ConfiguracionId: configuracion.Id,
+            CorteFecha: corteFecha,
+            CorteAdvertencia: corteAdvertencia,
             MiembrosCreados: miembrosCreados,
             MiembrosYaExistian: miembrosYaExistian,
             MiembrosSalteados: miembrosSalteados,
@@ -87,6 +113,42 @@ public sealed class MigradorOctaviano(
             MovimientosSalteados: movimientosSalteados,
             ConsentimientosCreados: consentimientosCreados,
             ConsentimientosYaExistian: consentimientosYaExistian);
+    }
+
+    /// <summary>
+    /// Migrates Octaviano's own cutoff (<c>VipCortes</c>, one row) as Fidelizar's
+    /// <see cref="Corte"/> — the date the old system genuinely uses today, so the migrated
+    /// business is left with a real cutoff instead of none at all (owner's decision, see the
+    /// F0-09 follow-up report). <see cref="ICorteRepository"/> has no update method (I1-adjacent
+    /// discipline, ARCHITECTURE §3): a mismatch with one already on record is reported, never
+    /// overwritten — the same rule <c>VipPadronImporter</c> already follows for its own cutoff.
+    /// </summary>
+    private async Task<(DateOnly? Fecha, string? Advertencia)> MigrarCorteAsync(
+        int negocioId, DateTime ahoraUtc, CancellationToken cancellationToken)
+    {
+        var corteOctaviano = await origen.LeerCorteAsync(cancellationToken);
+        if (corteOctaviano is null)
+        {
+            return (null, null);
+        }
+
+        var existente = await corteRepository.ObtenerAsync(negocioId, cancellationToken);
+        if (existente is null)
+        {
+            var declarado = await corteRepository.DeclararAsync(
+                Corte.Declarar(negocioId, corteOctaviano.Fecha, UsuarioPlaceholderMigracion, ahoraUtc),
+                cancellationToken);
+            return (declarado.Fecha, null);
+        }
+
+        if (existente.Fecha != corteOctaviano.Fecha)
+        {
+            return (existente.Fecha,
+                $"el corte de Octaviano ({corteOctaviano.Fecha:yyyy-MM-dd}) no coincide con el ya " +
+                $"declarado en Fidelizar ({existente.Fecha:yyyy-MM-dd}); no se sobrescribe.");
+        }
+
+        return (existente.Fecha, null);
     }
 
     private async Task<Negocio> ObtenerOCrearNegocioAsync(DateTime ahoraUtc, CancellationToken cancellationToken)
@@ -111,6 +173,8 @@ public sealed class MigradorOctaviano(
 
     private async Task<ConfiguracionPrograma> ObtenerOCrearConfiguracionAsync(
         int negocioId,
+        decimal porcentajeAcumulacion,
+        decimal? objetivoMensual,
         IReadOnlyList<OctavianoMiembro> miembros,
         IReadOnlyList<OctavianoMovimiento> movimientos,
         DateTime ahoraUtc,
@@ -131,18 +195,15 @@ public sealed class MigradorOctaviano(
         var nueva = new ConfiguracionPrograma
         {
             NegocioId = negocioId,
-            PorcentajeAcumulacion = PorcentajeAcumulacionHistorico,
-            ObjetivoMensual = ObjetivoMensualHistorico,
+            PorcentajeAcumulacion = porcentajeAcumulacion,
+            ObjetivoMensual = objetivoMensual,
             GraciaHabilitada = false,
             MesesDeGracia = null,
             UmbralMesMalo = null,
             TopeMesesCongelados = null,
             VigenteDesde = vigenteDesde,
             VigenteHasta = null,
-            // Usuario es F1-03 y todavía no existe (igual que Corte.DeclaradoPorUsuarioId y
-            // MovimientoCredito.UsuarioId en el resto del código ya portado). 0 representa
-            // "migración F0-09", no un usuario real.
-            CreadoPorUsuarioId = 0,
+            CreadoPorUsuarioId = UsuarioPlaceholderMigracion,
         };
 
         return await configuracionRepository.CrearAsync(nueva, cancellationToken);

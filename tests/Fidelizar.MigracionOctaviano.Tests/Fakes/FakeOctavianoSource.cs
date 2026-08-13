@@ -8,7 +8,9 @@ namespace Fidelizar.MigracionOctaviano.Tests.Fakes;
 /// rows with invented names and ids (CLAUDE.md: a real member is never a test case).
 /// </summary>
 public sealed class FakeOctavianoSource(
-    IReadOnlyList<OctavianoMiembro> miembros, IReadOnlyList<OctavianoMovimiento> movimientos)
+    IReadOnlyList<OctavianoMiembro> miembros,
+    IReadOnlyList<OctavianoMovimiento> movimientos,
+    OctavianoCorte? corte = null)
     : IOctavianoSource
 {
     public Task<IReadOnlyList<TablaEsquema>> LeerEsquemaAsync(CancellationToken cancellationToken = default) =>
@@ -19,4 +21,7 @@ public sealed class FakeOctavianoSource(
 
     public Task<IReadOnlyList<OctavianoMovimiento>> LeerMovimientosAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult(movimientos);
+
+    public Task<OctavianoCorte?> LeerCorteAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(corte);
 }

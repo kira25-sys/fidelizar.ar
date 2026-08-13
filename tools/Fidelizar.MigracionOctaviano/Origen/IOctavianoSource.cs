@@ -16,4 +16,8 @@ public interface IOctavianoSource
     /// <summary>Every ledger row, for every member, in one call — the migrator groups and orders
     /// them itself. Append-only history, not a single collapsed balance (ROADMAP F0-09).</summary>
     Task<IReadOnlyList<OctavianoMovimiento>> LeerMovimientosAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Octaviano's own cutoff, or null when it has none declared (a fresh install with
+    /// no <c>VipCortes</c> row yet — see <c>AddVipCorte</c>'s own migration comment).</summary>
+    Task<OctavianoCorte?> LeerCorteAsync(CancellationToken cancellationToken = default);
 }

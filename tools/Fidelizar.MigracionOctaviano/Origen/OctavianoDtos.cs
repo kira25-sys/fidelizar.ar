@@ -32,6 +32,14 @@ public sealed record OctavianoMovimiento(
     decimal SaldoResultante);
 
 /// <summary>
+/// Octaviano's own cutoff, a one-row table (<c>VipCortes</c>) — the date the old system's own
+/// balances are current through. Migrated as Fidelizar's <c>Corte</c> (DATA-MODEL §4): it is the
+/// date the old system genuinely uses today, and leaving it out would leave the migrated business
+/// with no cutoff at all, contradicting a ledger that was otherwise migrated whole.
+/// </summary>
+public sealed record OctavianoCorte(int Id, DateOnly Fecha, DateTime ActualizadoEn);
+
+/// <summary>
 /// Column name and declared SQLite type of one column, for the schema-only report (CLAUDE.md:
 /// "si querés mostrarme la forma de una tabla, mostrame el esquema, nunca su contenido").
 /// </summary>

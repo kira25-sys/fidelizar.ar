@@ -15,21 +15,38 @@ public class MigradorOctavianoTests
 {
     private static readonly DateTime AhoraUtc = new(2026, 8, 12, 10, 0, 0, DateTimeKind.Utc);
 
+    // Deliberately NOT RN-01's or RN-06's real values — using different invented numbers here is
+    // what proves EjecutarAsync actually uses its caller-supplied parameters and does not fall
+    // back to a value baked into MigradorOctaviano itself (ARCHITECTURE §6).
+    private const decimal PorcentajeInventado = 0.05m;
+    private const decimal ObjetivoInventado = 50_000m;
+
     private static (MigradorOctaviano Migrador, FakeNegocioRepository Negocios, FakeConfiguracionProgramaRepository Configuraciones,
-        FakeMiembroRepository Miembros, FakeMovimientoRepository Movimientos, FakeConsentimientoRepository Consentimientos)
-        CrearMigrador(IReadOnlyList<OctavianoMiembro> miembrosOrigen, IReadOnlyList<OctavianoMovimiento> movimientosOrigen)
+        FakeMiembroRepository Miembros, FakeMovimientoRepository Movimientos, FakeConsentimientoRepository Consentimientos,
+        FakeCorteRepository Cortes)
+        CrearMigrador(
+            IReadOnlyList<OctavianoMiembro> miembrosOrigen,
+            IReadOnlyList<OctavianoMovimiento> movimientosOrigen,
+            OctavianoCorte? corteOrigen = null)
     {
-        var origen = new FakeOctavianoSource(miembrosOrigen, movimientosOrigen);
+        var origen = new FakeOctavianoSource(miembrosOrigen, movimientosOrigen, corteOrigen);
         var negocios = new FakeNegocioRepository();
         var configuraciones = new FakeConfiguracionProgramaRepository();
         var miembros = new FakeMiembroRepository();
         var movimientos = new FakeMovimientoRepository();
         var consentimientos = new FakeConsentimientoRepository();
+        var cortes = new FakeCorteRepository();
 
-        var migrador = new MigradorOctaviano(origen, negocios, configuraciones, miembros, movimientos, consentimientos);
+        var migrador = new MigradorOctaviano(
+            origen, negocios, configuraciones, miembros, movimientos, consentimientos, cortes);
 
-        return (migrador, negocios, configuraciones, miembros, movimientos, consentimientos);
+        return (migrador, negocios, configuraciones, miembros, movimientos, consentimientos, cortes);
     }
+
+    private static Task<ResultadoMigracion> EjecutarAsync(
+        MigradorOctaviano migrador, DateTime? ahoraUtc = null, decimal? porcentaje = null, decimal? objetivo = null) =>
+        migrador.EjecutarAsync(
+            porcentaje ?? PorcentajeInventado, objetivo ?? ObjetivoInventado, ahoraUtc ?? AhoraUtc);
 
     // Invented fixture: "9101"/"Prueba Ficticia Uno" is not a real member, the same convention
     // VipPadronImporterTests already uses.
@@ -54,26 +71,42 @@ public class MigradorOctavianoTests
         new(id, miembroId, fecha, $"{fecha:yyyy-MM}", tipo, monto, referenciaVenta, usuario, motivo, 0m);
 
     [Fact]
-    public async Task EjecutarAsync_CreaElNegocioYUnaConfiguracionVigente()
+    public async Task EjecutarAsync_CreaElNegocioYUnaConfiguracionVigenteConLosParametrosRecibidos()
     {
-        var (migrador, negocios, configuraciones, _, _, _) = CrearMigrador([], []);
+        var (migrador, negocios, configuraciones, _, _, _, _) = CrearMigrador([], []);
 
-        var resultado = await migrador.EjecutarAsync(AhoraUtc);
+        var resultado = await EjecutarAsync(migrador, porcentaje: 0.05m, objetivo: 50_000m);
 
         Assert.NotNull(await negocios.ObtenerUnicoAsync());
         var config = await configuraciones.ObtenerVigenteAsync(resultado.NegocioId);
         Assert.NotNull(config);
-        Assert.Equal(0.03m, config!.PorcentajeAcumulacion);
+        Assert.Equal(0.05m, config!.PorcentajeAcumulacion);
+        Assert.Equal(50_000m, config.ObjetivoMensual);
         Assert.Null(config.VigenteHasta);
+    }
+
+    [Fact]
+    public async Task EjecutarAsync_ObjetivoMensualAusente_QuedaNulo()
+    {
+        // ObjetivoMensual es nullable a propósito: null significa que el programa no tiene
+        // objetivo (DATA-MODEL §1), no un dato que falte cargar. Se llama a EjecutarAsync
+        // directo, sin pasar por el helper: éste usa "??" para su valor por defecto, que
+        // convertiría un null explícito de vuelta en ObjetivoInventado.
+        var (migrador, _, configuraciones, _, _, _, _) = CrearMigrador([], []);
+
+        var resultado = await migrador.EjecutarAsync(PorcentajeInventado, null, AhoraUtc);
+
+        var config = await configuraciones.ObtenerVigenteAsync(resultado.NegocioId);
+        Assert.Null(config!.ObjetivoMensual);
     }
 
     [Fact]
     public async Task EjecutarAsync_MigraUnSocioConSusDatos()
     {
         var origen = MiembroInventado();
-        var (migrador, _, _, miembros, _, _) = CrearMigrador([origen], []);
+        var (migrador, _, _, miembros, _, _, _) = CrearMigrador([origen], []);
 
-        var resultado = await migrador.EjecutarAsync(AhoraUtc);
+        var resultado = await EjecutarAsync(migrador);
 
         Assert.Equal(1, resultado.MiembrosCreados);
         var creado = Assert.Single(miembros.Miembros);
@@ -93,9 +126,9 @@ public class MigradorOctavianoTests
             MovimientoInventado(2, 1, new DateTime(2025, 2, 10), tipo: 1, monto: 30m, referenciaVenta: 555), // Acumulacion
             MovimientoInventado(3, 1, new DateTime(2025, 3, 1), tipo: 2, monto: -200m, motivo: "Canje mostrador"), // Canje
         ];
-        var (migrador, _, _, miembros, movimientosRepo, _) = CrearMigrador([origen], movimientos);
+        var (migrador, _, _, miembros, movimientosRepo, _, _) = CrearMigrador([origen], movimientos);
 
-        var resultado = await migrador.EjecutarAsync(AhoraUtc);
+        var resultado = await EjecutarAsync(migrador);
 
         Assert.Equal(3, resultado.MovimientosMigrados);
         var miembro = miembros.Miembros.Single();
@@ -122,9 +155,9 @@ public class MigradorOctavianoTests
     {
         var origen = MiembroInventado();
         var movimiento = MovimientoInventado(1, 1, new DateTime(2020, 6, 15, 9, 30, 0), tipo: 0, monto: 500m);
-        var (migrador, _, _, _, movimientosRepo, _) = CrearMigrador([origen], [movimiento]);
+        var (migrador, _, _, _, movimientosRepo, _, _) = CrearMigrador([origen], [movimiento]);
 
-        await migrador.EjecutarAsync(AhoraUtc);
+        await EjecutarAsync(migrador);
 
         var migrado = Assert.Single(movimientosRepo.Movimientos);
         Assert.Equal(new DateOnly(2020, 6, 15), migrado.FechaEfectiva);
@@ -138,9 +171,9 @@ public class MigradorOctavianoTests
         // Origin's own Periodo string is deliberately different from Fecha's month, to prove the
         // migrator recomputes Periodo from FechaEfectiva rather than trusting Octaviano's column.
         var movimiento = new OctavianoMovimiento(1, 1, new DateTime(2021, 3, 20), "2021-01", 0, 500m, null, "sistema", null, 0m);
-        var (migrador, _, _, _, movimientosRepo, _) = CrearMigrador([origen], [movimiento]);
+        var (migrador, _, _, _, movimientosRepo, _, _) = CrearMigrador([origen], [movimiento]);
 
-        await migrador.EjecutarAsync(AhoraUtc);
+        await EjecutarAsync(migrador);
 
         Assert.Equal("2021-03", Assert.Single(movimientosRepo.Movimientos).Periodo);
     }
@@ -150,9 +183,9 @@ public class MigradorOctavianoTests
     {
         var origen = MiembroInventado();
         var movimiento = MovimientoInventado(1, 1, new DateTime(2021, 1, 1), tipo: 3, monto: -50m, motivo: "Ajuste manual"); // Ajuste
-        var (migrador, _, _, _, movimientosRepo, _) = CrearMigrador([origen], [movimiento]);
+        var (migrador, _, _, _, movimientosRepo, _, _) = CrearMigrador([origen], [movimiento]);
 
-        await migrador.EjecutarAsync(AhoraUtc);
+        await EjecutarAsync(migrador);
 
         Assert.Null(Assert.Single(movimientosRepo.Movimientos).UsuarioId);
     }
@@ -163,9 +196,9 @@ public class MigradorOctavianoTests
         // I4: Redondeo.Monto is the single rounding point in the system.
         var origen = MiembroInventado();
         var movimiento = MovimientoInventado(1, 1, new DateTime(2021, 1, 1), tipo: 0, monto: 10.126m);
-        var (migrador, _, _, _, movimientosRepo, _) = CrearMigrador([origen], [movimiento]);
+        var (migrador, _, _, _, movimientosRepo, _, _) = CrearMigrador([origen], [movimiento]);
 
-        await migrador.EjecutarAsync(AhoraUtc);
+        await EjecutarAsync(migrador);
 
         Assert.Equal(10.13m, Assert.Single(movimientosRepo.Movimientos).Monto);
     }
@@ -175,9 +208,9 @@ public class MigradorOctavianoTests
     {
         var fechaAlta = new DateOnly(2023, 4, 2);
         var origen = MiembroInventado(fechaAlta: fechaAlta);
-        var (migrador, _, _, miembros, _, consentimientos) = CrearMigrador([origen], []);
+        var (migrador, _, _, miembros, _, consentimientos, _) = CrearMigrador([origen], []);
 
-        var resultado = await migrador.EjecutarAsync(AhoraUtc);
+        var resultado = await EjecutarAsync(migrador);
 
         Assert.Equal(3, resultado.ConsentimientosCreados);
         var miembro = miembros.Miembros.Single();
@@ -197,14 +230,16 @@ public class MigradorOctavianoTests
     }
 
     [Fact]
-    public async Task EjecutarAsync_CorrerDosVeces_NoDuplicaMiembrosNiMovimientosNiConsentimientos()
+    public async Task EjecutarAsync_CorrerDosVeces_NoDuplicaMiembrosNiMovimientosNiConsentimientosNiCorte()
     {
         var origen = MiembroInventado();
         var movimiento = MovimientoInventado(1, 1, new DateTime(2021, 1, 1), tipo: 0, monto: 500m);
-        var (migrador, _, _, miembros, movimientosRepo, consentimientos) = CrearMigrador([origen], [movimiento]);
+        var corte = new OctavianoCorte(1, new DateOnly(2026, 8, 1), AhoraUtc);
+        var (migrador, _, _, miembros, movimientosRepo, consentimientos, cortes) =
+            CrearMigrador([origen], [movimiento], corte);
 
-        var primera = await migrador.EjecutarAsync(AhoraUtc);
-        var segunda = await migrador.EjecutarAsync(AhoraUtc.AddMinutes(5));
+        var primera = await EjecutarAsync(migrador);
+        var segunda = await EjecutarAsync(migrador, ahoraUtc: AhoraUtc.AddMinutes(5));
 
         Assert.Equal(1, primera.MiembrosCreados);
         Assert.Equal(0, segunda.MiembrosCreados);
@@ -218,18 +253,23 @@ public class MigradorOctavianoTests
         Assert.Equal(0, segunda.ConsentimientosCreados);
         Assert.Equal(3, segunda.ConsentimientosYaExistian);
 
+        Assert.Equal(new DateOnly(2026, 8, 1), primera.CorteFecha);
+        Assert.Equal(new DateOnly(2026, 8, 1), segunda.CorteFecha);
+        Assert.Null(segunda.CorteAdvertencia);
+
         Assert.Single(miembros.Miembros);
         Assert.Single(movimientosRepo.Movimientos);
         Assert.Equal(3, consentimientos.Consentimientos.Count);
+        Assert.NotNull(await cortes.ObtenerAsync(primera.NegocioId));
     }
 
     [Fact]
     public async Task EjecutarAsync_SocioConNombreVacio_SeSalteaYSeReportaPorClienteExternoId()
     {
         var origen = MiembroInventado(clienteExternoId: 9202, nombre: "   ");
-        var (migrador, _, _, miembros, _, _) = CrearMigrador([origen], []);
+        var (migrador, _, _, miembros, _, _, _) = CrearMigrador([origen], []);
 
-        var resultado = await migrador.EjecutarAsync(AhoraUtc);
+        var resultado = await EjecutarAsync(migrador);
 
         Assert.Equal(0, resultado.MiembrosCreados);
         Assert.Empty(miembros.Miembros);
@@ -247,9 +287,9 @@ public class MigradorOctavianoTests
             MovimientoInventado(1, 1, new DateTime(2021, 1, 1), tipo: 99, monto: 10m), // unknown type
             MovimientoInventado(2, 1, new DateTime(2021, 2, 1), tipo: 0, monto: 500m),
         ];
-        var (migrador, _, _, _, movimientosRepo, _) = CrearMigrador([origen], movimientos);
+        var (migrador, _, _, _, movimientosRepo, _, _) = CrearMigrador([origen], movimientos);
 
-        var resultado = await migrador.EjecutarAsync(AhoraUtc);
+        var resultado = await EjecutarAsync(migrador);
 
         Assert.Equal(1, resultado.MovimientosMigrados);
         Assert.Single(movimientosRepo.Movimientos);
@@ -264,9 +304,9 @@ public class MigradorOctavianoTests
         // No member with internal Octaviano id 999 exists — should never happen given the FK in
         // Octaviano's own schema, but the migrator must report it, not throw.
         var movimiento = MovimientoInventado(1, 999, new DateTime(2021, 1, 1), tipo: 0, monto: 10m);
-        var (migrador, _, _, _, movimientosRepo, _) = CrearMigrador([], [movimiento]);
+        var (migrador, _, _, _, movimientosRepo, _, _) = CrearMigrador([], [movimiento]);
 
-        var resultado = await migrador.EjecutarAsync(AhoraUtc);
+        var resultado = await EjecutarAsync(migrador);
 
         Assert.Empty(movimientosRepo.Movimientos);
         Assert.Single(resultado.MovimientosSalteados);
@@ -282,9 +322,9 @@ public class MigradorOctavianoTests
             MovimientoInventado(2, 1, new DateTime(2021, 2, 1), tipo: 1, monto: 15m, referenciaVenta: 42),
             MovimientoInventado(3, 1, new DateTime(2021, 3, 1), tipo: 3, monto: -10m, motivo: "Ajuste"),
         ];
-        var (migrador, _, _, _, movimientosRepo, _) = CrearMigrador([origen], movimientos);
+        var (migrador, _, _, _, movimientosRepo, _, _) = CrearMigrador([origen], movimientos);
 
-        await migrador.EjecutarAsync(AhoraUtc);
+        await EjecutarAsync(migrador);
 
         var porTipo = movimientosRepo.Movimientos.ToDictionary(m => m.Tipo);
         Assert.Null(porTipo[TipoMovimientoCredito.SaldoInicial].ConfiguracionId);
@@ -297,11 +337,71 @@ public class MigradorOctavianoTests
     {
         var origen = MiembroInventado(id: 1);
         var movimiento = MovimientoInventado(1, 1, new DateTime(2021, 1, 1), tipo: 0, monto: 500m);
-        var (migrador, _, _, miembros, movimientosRepo, _) = CrearMigrador([origen], [movimiento]);
+        var (migrador, _, _, miembros, movimientosRepo, _, _) = CrearMigrador([origen], [movimiento]);
 
-        var resultado = await migrador.EjecutarAsync(AhoraUtc);
+        var resultado = await EjecutarAsync(migrador);
 
         Assert.All(miembros.Miembros, m => Assert.Equal(resultado.NegocioId, m.NegocioId));
         Assert.All(movimientosRepo.Movimientos, m => Assert.Equal(resultado.NegocioId, m.NegocioId));
+    }
+
+    [Fact]
+    public async Task EjecutarAsync_MigraElCorteDeOctavianoCuandoNoHayUnoDeclarado()
+    {
+        var corte = new OctavianoCorte(1, new DateOnly(2026, 8, 1), AhoraUtc);
+        var (migrador, _, _, _, _, _, cortes) = CrearMigrador([], [], corte);
+
+        var resultado = await EjecutarAsync(migrador);
+
+        Assert.Equal(new DateOnly(2026, 8, 1), resultado.CorteFecha);
+        Assert.Null(resultado.CorteAdvertencia);
+        var guardado = await cortes.ObtenerAsync(resultado.NegocioId);
+        Assert.NotNull(guardado);
+        Assert.Equal(new DateOnly(2026, 8, 1), guardado.Fecha);
+    }
+
+    [Fact]
+    public async Task EjecutarAsync_SinCorteEnElOrigen_NoCreaNingunoYNoAvisa()
+    {
+        var (migrador, _, _, _, _, _, cortes) = CrearMigrador([], [], corteOrigen: null);
+
+        var resultado = await EjecutarAsync(migrador);
+
+        Assert.Null(resultado.CorteFecha);
+        Assert.Null(resultado.CorteAdvertencia);
+        Assert.Null(await cortes.ObtenerAsync(resultado.NegocioId));
+    }
+
+    [Fact]
+    public async Task EjecutarAsync_CorteYaDeclaradoConOtraFecha_NoLoSobrescribeYAvisa()
+    {
+        // ICorteRepository no tiene método de actualización (I1-adjacent, ARCHITECTURE §3): un
+        // corte de Octaviano que no coincide con uno ya declarado en Fidelizar se reporta, nunca
+        // se sobrescribe.
+        var negocios = new FakeNegocioRepository();
+        var configuraciones = new FakeConfiguracionProgramaRepository();
+        var miembros = new FakeMiembroRepository();
+        var movimientos = new FakeMovimientoRepository();
+        var consentimientos = new FakeConsentimientoRepository();
+        var cortes = new FakeCorteRepository();
+
+        var migradorSinCorte = new MigradorOctaviano(
+            new FakeOctavianoSource([], [], corte: null),
+            negocios, configuraciones, miembros, movimientos, consentimientos, cortes);
+        var primera = await migradorSinCorte.EjecutarAsync(PorcentajeInventado, ObjetivoInventado, AhoraUtc);
+
+        // A cutoff already on record in Fidelizar, with a date different from Octaviano's own.
+        await cortes.DeclararAsync(Corte.Declarar(primera.NegocioId, new DateOnly(2026, 1, 1), 0, AhoraUtc));
+
+        var migradorConCorte = new MigradorOctaviano(
+            new FakeOctavianoSource([], [], new OctavianoCorte(1, new DateOnly(2026, 8, 1), AhoraUtc)),
+            negocios, configuraciones, miembros, movimientos, consentimientos, cortes);
+        var resultado = await migradorConCorte.EjecutarAsync(PorcentajeInventado, ObjetivoInventado, AhoraUtc);
+
+        Assert.Equal(new DateOnly(2026, 1, 1), resultado.CorteFecha);
+        Assert.NotNull(resultado.CorteAdvertencia);
+        Assert.Contains("no se sobrescribe", resultado.CorteAdvertencia, StringComparison.OrdinalIgnoreCase);
+        var guardado = await cortes.ObtenerAsync(primera.NegocioId);
+        Assert.Equal(new DateOnly(2026, 1, 1), guardado!.Fecha); // untouched
     }
 }

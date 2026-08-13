@@ -114,6 +114,20 @@ public sealed class FakeMovimientoRepository : IMovimientoRepository
     }
 }
 
+public sealed class FakeCorteRepository : ICorteRepository
+{
+    private readonly Dictionary<int, Corte> _cortes = [];
+
+    public Task<Corte?> ObtenerAsync(int negocioId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_cortes.GetValueOrDefault(negocioId));
+
+    public Task<Corte> DeclararAsync(Corte corte, CancellationToken cancellationToken = default)
+    {
+        _cortes[corte.NegocioId] = corte;
+        return Task.FromResult(corte);
+    }
+}
+
 public sealed class FakeConsentimientoRepository : IConsentimientoRepository
 {
     private static readonly PropertyInfo IdProperty =

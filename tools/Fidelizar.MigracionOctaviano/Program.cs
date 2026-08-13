@@ -1,4 +1,6 @@
+using System.Globalization;
 using Fidelizar.Infrastructure.Persistence;
+using Fidelizar.Infrastructure.Repositories;
 using Fidelizar.MigracionOctaviano.Destino;
 using Fidelizar.MigracionOctaviano.Migracion;
 using Fidelizar.MigracionOctaviano.Origen;
@@ -34,6 +36,38 @@ if (modoEsquema)
     return 0;
 }
 
+// ARCHITECTURE §6 forbids a business rule number as a literal in code. RN-01 (accrual
+// percentage) and RN-06 (monthly target) are per-business configuration — this tool never
+// guesses them, exactly like Corte is not a constant (F0-07). Required, no default: a missing
+// value fails loudly here instead of silently seeding a wrong ConfiguracionPrograma with real
+// money on the line. The example in the message below is an arbitrary placeholder fraction, not
+// RN-01's actual value — the caller supplies the real number, this tool never states it.
+var textoPorcentaje = LeerArgumentoConValor(args, "--porcentaje-acumulacion");
+if (textoPorcentaje is null ||
+    !decimal.TryParse(textoPorcentaje, NumberStyles.Number, CultureInfo.InvariantCulture, out var porcentajeAcumulacion))
+{
+    Console.Error.WriteLine(
+        "Falta (o no es un número válido) --porcentaje-acumulacion. Es RN-01, configuración por " +
+        "negocio (ARCHITECTURE §6) — esta herramienta no lo inventa. Ejemplo de formato (no es el " +
+        "valor real): --porcentaje-acumulacion 0.05");
+    return 1;
+}
+
+// RN-06: opcional a propósito. ConfiguracionPrograma.ObjetivoMensual es nullable — null significa
+// que el programa no tiene objetivo mensual (DATA-MODEL §1), no un valor que falte cargar.
+decimal? objetivoMensual = null;
+var textoObjetivo = LeerArgumentoConValor(args, "--objetivo-mensual");
+if (textoObjetivo is not null)
+{
+    if (!decimal.TryParse(textoObjetivo, NumberStyles.Number, CultureInfo.InvariantCulture, out var valorObjetivo))
+    {
+        Console.Error.WriteLine($"--objetivo-mensual no es un número válido: '{textoObjetivo}'.");
+        return 1;
+    }
+
+    objetivoMensual = valorObjetivo;
+}
+
 var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
@@ -57,12 +91,13 @@ var migrador = new MigradorOctaviano(
     origen,
     new NegocioRepositoryEf(dbContext),
     new ConfiguracionProgramaRepositoryEf(dbContext),
-    new Fidelizar.Infrastructure.Repositories.MiembroRepository(dbContext),
-    new Fidelizar.Infrastructure.Repositories.MovimientoRepository(dbContext),
-    new ConsentimientoRepositoryEf(dbContext));
+    new MiembroRepository(dbContext),
+    new MovimientoRepository(dbContext),
+    new ConsentimientoRepositoryEf(dbContext),
+    new CorteRepository(dbContext));
 
 Console.WriteLine("Migrando...");
-var resultado = await migrador.EjecutarAsync(DateTime.UtcNow);
+var resultado = await migrador.EjecutarAsync(porcentajeAcumulacion, objetivoMensual, DateTime.UtcNow);
 
 ImprimirResultado(resultado);
 
@@ -94,6 +129,12 @@ static void ImprimirResultado(ResultadoMigracion resultado)
     Console.WriteLine("=== Resultado de la migración ===");
     Console.WriteLine($"NegocioId: {resultado.NegocioId}");
     Console.WriteLine($"ConfiguracionId: {resultado.ConfiguracionId}");
+    Console.WriteLine($"Corte: {(resultado.CorteFecha is { } fecha ? fecha.ToString("yyyy-MM-dd") : "(sin corte en el origen)")}");
+    if (resultado.CorteAdvertencia is not null)
+    {
+        Console.WriteLine($"  Advertencia: {resultado.CorteAdvertencia}");
+    }
+
     Console.WriteLine($"Miembros creados: {resultado.MiembrosCreados}");
     Console.WriteLine($"Miembros que ya existían: {resultado.MiembrosYaExistian}");
     Console.WriteLine($"Miembros salteados: {resultado.MiembrosSalteados.Count}");

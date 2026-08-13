@@ -1,10 +1,17 @@
 name: CI
 
-# ARCHITECTURE §14: a red build is not merged. Runs on every push and every pull request, no
-# branch filter — a broken build on any branch should be visible before it reaches a PR.
+# ARCHITECTURE §14: a red build is not merged. Runs on every push, no branch filter — a broken
+# build on any branch should be visible before it reaches a PR.
+#
+# Push only, deliberately. Adding `pull_request:` on top of `push:` runs the whole suite twice
+# for every commit in an open PR: once on the branch commit, once on the ephemeral merge commit
+# GitHub builds from the branch and the base. The pull request page still shows the push run's
+# result, so the second run buys one thing only — catching a semantic conflict where the branch
+# and `main` are each green but their merge is not. The owner reviews and merges every PR by
+# hand and accepts that risk in exchange for one unambiguous check per commit. Decided by the
+# owner 2026-08-13.
 on:
   push:
-  pull_request:
 
 jobs:
   build-and-test:

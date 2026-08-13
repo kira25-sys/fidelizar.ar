@@ -411,8 +411,15 @@ A backup that has never been restored is a hypothesis, not a backup.
 ### Continuous integration
 
 §11 requires a clean build and green tests before every merge. That requirement is enforced by
-CI, not by memory: a GitHub Actions workflow runs `dotnet build` and `dotnet test` on every push
-and pull request. A red build is not merged.
+CI, not by memory: a GitHub Actions workflow runs `dotnet build` and `dotnet test` on every push,
+on every branch. A red build is not merged.
+
+**On `push` only, not on `pull_request`.** Listening to both events runs the suite twice per
+commit in an open PR — once on the branch commit, once on the merge commit GitHub synthesises
+from the branch and the base — and the PR page reports the push run either way. The duplicate
+covers exactly one case: branch and base each green, their merge red. The owner reviews and
+merges every PR by hand and accepts that case in exchange for one unambiguous check per commit
+(decided 2026-08-13).
 
 ### Monitoring
 

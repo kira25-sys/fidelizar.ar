@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Fidelizar.Domain\Fidelizar.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Fidelizar.Application\Fidelizar.Application.csproj" />
+    <ProjectReference Include="..\..\src\Fidelizar.Infrastructure\Fidelizar.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Same authorization and same reasoning as Fidelizar.MigracionOctaviano's package reference
+      (owner-authorized 2026-08-12, F0-09/F0-11, nuget.org, MIT, official Microsoft package): the
+      only way to read octaviano.db, a SQLite file, read-only. Deliberately scoped to this one-off
+      verification tool and nowhere near Fidelizar.Infrastructure, so the product itself never
+      ships a SQLite client (ARCHITECTURE §2, CLAUDE.md condition).
+    -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+  </ItemGroup>
+
+</Project>

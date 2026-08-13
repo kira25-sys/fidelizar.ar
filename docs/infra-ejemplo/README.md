@@ -13,6 +13,7 @@ nobody notices until it is in production.
 | [compose.ejemplo.yml](compose.ejemplo.yml) | The three services one business needs: the API, its database, and the nightly backup |
 | [caddyfile.ejemplo](caddyfile.ejemplo) | Reverse proxy with automatic HTTPS, one site per business |
 | [variables-entorno.ejemplo.txt](variables-entorno.ejemplo.txt) | Every environment variable the API reads, and which are mandatory |
+| [restore-drill.ejemplo.md](restore-drill.ejemplo.md) | Back up, restore into a clean database, verify balances, repeat periodically (ARCHITECTURE §14, ROADMAP F0-15) |
 
 ## The shape this assumes
 

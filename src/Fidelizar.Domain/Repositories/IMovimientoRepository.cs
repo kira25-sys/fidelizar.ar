@@ -27,6 +27,13 @@ public interface IMovimientoRepository
         int negocioId, string periodo, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Whether the member already has any ledger row at all. The padron importer (F0-08) uses
+    /// this to avoid writing a second <c>SaldoInicial</c> on a re-run: the initial balance is
+    /// written once per member, ever.
+    /// </summary>
+    Task<bool> TieneMovimientosAsync(int negocioId, int miembroId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Appends one movement to the ledger. Computes and stamps
     /// <see cref="MovimientoCredito.SaldoResultante"/> from the current balance inside the same
     /// transaction as the insert (DATA-MODEL §4), so a concurrent append can never race past it.

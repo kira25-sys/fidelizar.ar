@@ -68,10 +68,75 @@ public class DependencyDirectionTests
 
         var declaredReferences = XDocument.Load(clientCsprojPath)
             .Descendants("ProjectReference")
-            .Select(e => Path.GetFileNameWithoutExtension((string)e.Attribute("Include")!))
+            .Select(e => ProjectNameFromInclude((string)e.Attribute("Include")!))
             .ToArray();
 
         Assert.Equal(["Fidelizar.Shared"], declaredReferences);
+    }
+
+    /// <summary>
+    /// The other half of the §3 diagram, and the one that had already drifted: the arrows run
+    /// <c>Api → Application → Domain</c> and <c>Api → Infrastructure → Domain</c>. There is no
+    /// arrow from <c>Infrastructure</c> to <c>Application</c>. An unused reference is still a
+    /// breach of the contract — it is exactly what lets a repository start calling a use case
+    /// later, at which point the cycle is load-bearing and expensive to undo.
+    /// </summary>
+    [Theory]
+    [InlineData("Fidelizar.Application", new[] { "Fidelizar.Domain" })]
+    [InlineData("Fidelizar.Infrastructure", new[] { "Fidelizar.Domain" })]
+    [InlineData("Fidelizar.Shared", new string[0])]
+    public void Csproj_declares_only_the_project_references_ARCHITECTURE_allows(
+        string project,
+        string[] allowed)
+    {
+        var csprojPath = FindSolutionRoot("src", project, $"{project}.csproj");
+
+        var declaredReferences = XDocument.Load(csprojPath)
+            .Descendants("ProjectReference")
+            .Select(e => ProjectNameFromInclude((string)e.Attribute("Include")!))
+            .Order()
+            .ToArray();
+
+        Assert.Equal(allowed.Order().ToArray(), declaredReferences);
+    }
+
+    /// <summary>
+    /// Extracts the project name from a <c>&lt;ProjectReference Include="..."&gt;</c> value.
+    ///
+    /// <para>
+    /// <b>MSBuild always writes <c>\</c> as the path separator inside a .csproj, on every
+    /// platform</b> — that is part of the file format, not a Windows artefact.
+    /// <see cref="Path.GetFileNameWithoutExtension(string)"/> only treats <c>\</c> as a separator
+    /// when running on Windows; on Linux it is an ordinary filename character, so the whole
+    /// relative path comes back as the "file name" and the comparison fails with
+    /// <c>"..\Fidelizar.Domain\Fidelizar.Domain"</c> instead of <c>"Fidelizar.Domain"</c>.
+    /// </para>
+    ///
+    /// <para>
+    /// CI runs on Linux (see .github/workflows), so the separator has to be normalised explicitly
+    /// rather than left to the platform's idea of what a separator is. Found by CI on 2026-08-13,
+    /// after the whole suite had been passing on a Windows dev machine.
+    /// </para>
+    /// </summary>
+    private static string ProjectNameFromInclude(string include) =>
+        Path.GetFileNameWithoutExtension(include.Replace('\\', '/'));
+
+    /// <summary>
+    /// Regression test for the platform bug described on <see cref="ProjectNameFromInclude"/>.
+    /// It uses a hard-coded MSBuild-style path instead of a real .csproj precisely so it fails on
+    /// Linux the moment someone "simplifies" the helper back to a bare
+    /// <see cref="Path.GetFileNameWithoutExtension(string)"/>.
+    /// </summary>
+    [Theory]
+    [InlineData(@"..\Fidelizar.Domain\Fidelizar.Domain.csproj", "Fidelizar.Domain")]
+    [InlineData(@"..\Fidelizar.Shared\Fidelizar.Shared.csproj", "Fidelizar.Shared")]
+    [InlineData("../Fidelizar.Domain/Fidelizar.Domain.csproj", "Fidelizar.Domain")]
+    [InlineData("Fidelizar.Domain.csproj", "Fidelizar.Domain")]
+    public void ProjectNameFromInclude_reads_the_MSBuild_separator_on_every_platform(
+        string include,
+        string expected)
+    {
+        Assert.Equal(expected, ProjectNameFromInclude(include));
     }
 
     private static string FindSolutionRoot(params string[] relativePathFromRoot)

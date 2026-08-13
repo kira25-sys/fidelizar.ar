@@ -2,7 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Fidelizar.Domain\Fidelizar.Domain.csproj" />
-    <ProjectReference Include="..\Fidelizar.Application\Fidelizar.Application.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,6 +19,14 @@
     -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.11" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!--
+      Owner-authorized 2026-08-12 (F0-08, nuget.org, MIT): reads the padron Excel roster in
+      VipPadronImporter, the same version Octaviano uses today so the port is faithful. Scoped to
+      this project only — importers and adapters live in Fidelizar.Infrastructure (CLAUDE.md).
+      Fidelizar.Infrastructure.Tests gets it transitively through the ProjectReference below to
+      build .xlsx fixtures, with no separate PackageReference of its own.
+    -->
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -48,7 +48,12 @@ namespace Fidelizar.MigracionOctaviano.Migracion;
 /// </summary>
 public sealed class MigradorOctaviano(
     IOctavianoSource origen,
-    INegocioRepository negocioRepository,
+    // Fully qualified: F1-03 adds a real Fidelizar.Domain.Repositories.INegocioRepository with a
+    // different, narrower contract (exactly one active Negocio, or a loud failure — no create,
+    // no "not yet migrated" case). This tool keeps its own tool-local Destino.INegocioRepository
+    // unchanged — get-or-create is what a one-off bootstrap migration actually needs, and this
+    // tool's behaviour is already gate-verified against real production data (ROADMAP, F0-11).
+    Destino.INegocioRepository negocioRepository,
     IConfiguracionProgramaRepository configuracionRepository,
     IMiembroRepository miembroRepository,
     IMovimientoRepository movimientoRepository,

@@ -11,7 +11,9 @@ namespace Fidelizar.MigracionOctaviano.Tests.Fakes;
 /// the style of <c>Fidelizar.Infrastructure.Tests.Import.Fakes</c>: reflection sets the
 /// <c>init</c>/private <c>Id</c> the same way EF Core's materialiser would.
 /// </summary>
-public sealed class FakeNegocioRepository : INegocioRepository
+// Fully qualified: F1-03 adds a real Fidelizar.Domain.Repositories.INegocioRepository with a
+// different, narrower contract than this tool-local one (see MigradorOctaviano's constructor).
+public sealed class FakeNegocioRepository : Destino.INegocioRepository
 {
     private static readonly PropertyInfo IdProperty = typeof(Negocio).GetProperty(nameof(Negocio.Id))!;
 

@@ -14,7 +14,7 @@ screen work proceed without waiting on each other.
 
 ---
 
-## Phase 0 — Foundations
+## Phase 0 — Foundations ✅ **closed 2026-08-13**
 
 > **Gate:** the 293 members and their entire ledger are in Postgres, and every balance matches
 > **to the peso** in all three places: Postgres, Octaviano as it runs today, and the owner's
@@ -43,6 +43,37 @@ screen work proceed without waiting on each other.
 
 **F0-11 is the gate.** It is not a formality: if one balance is off by one peso, the cause is
 found and fixed before anything in phase 1 begins.
+
+### Gate met — 2026-08-13
+
+`Fidelizar.VerificacionGate` was run against the real sources and returned, verbatim:
+
+> `VEREDICTO: GATE CUMPLIDO — las tres puntas coinciden para los 293 socios, sin excepciones.`
+
+| | |
+| --- | --- |
+| Members migrated | 293 — none skipped |
+| Ledger movements | 575 — none skipped |
+| `Consentimiento` rows | 879 (293 × 3, `Canal = MigracionVerbal`) |
+| Members compared, all three sources | 293 / 293 / 293 |
+| **Discrepancies** | **0** |
+| Control sum, identical across all three | 2.390.011,35 |
+
+The comparison is exact `decimal` equality with no tolerance and no epsilon, routed through the
+single rounding point (I4). The Postgres side is read through `SaldoService` → `SUM(Monto)` (I2),
+not a query written for the occasion, so a defect in the ported calculation would surface here
+rather than be masked.
+
+A fourth, independent confirmation: the five `TOTAL` cells the owner typed by hand in the
+spreadsheet — cells the harness never reads — sum to that same 2.390.011,35. The spreadsheet
+carries 298 rows against 293 members; the five extras were each verified to be a sheet total
+matching the sum of its own sheet's member rows (78+50+39+85+41 = 293), so no member went
+uncompared.
+
+**The report itself is deliberately not in this repository** and never will be: it identifies
+members by `ClienteExternoId` and lives wherever `--salida` pointed, outside the working tree.
+
+**Phase 1 is unblocked.**
 
 > **F0-09, F0-11 and F0-15 are the only tasks in the whole roadmap allowed to read real member data**
 > (CLAUDE.md, "the one exception"). Read-only, and nothing personal is ever written down:

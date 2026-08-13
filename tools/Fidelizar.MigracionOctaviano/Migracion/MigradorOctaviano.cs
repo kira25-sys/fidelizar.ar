@@ -1,0 +1,343 @@
+using System.Globalization;
+using Fidelizar.Domain.Entities;
+using Fidelizar.Domain.Money;
+using Fidelizar.Domain.Repositories;
+using Fidelizar.Domain.Texto;
+using Fidelizar.MigracionOctaviano.Destino;
+using Fidelizar.MigracionOctaviano.Origen;
+
+namespace Fidelizar.MigracionOctaviano.Migracion;
+
+/// <summary>
+/// The one-off migration itself (ROADMAP F0-09): Octaviano's SQLite VIP club → Fidelizar's
+/// Postgres, members and their <b>entire</b> ledger, plus one <see cref="Consentimiento"/> per
+/// member for every <see cref="TipoConsentimiento"/> (DATA-MODEL §7).
+///
+/// <para>
+/// <b>The ledger is migrated whole, never collapsed.</b> Unlike <c>VipPadronImporter</c> (F0-08),
+/// which writes a single <c>SaldoInicial</c> from a spreadsheet's current balance, this reads
+/// every row of Octaviano's own <c>VipMovimientos</c> table and writes one
+/// <see cref="MovimientoCredito"/> per row, preserving its original type, amount and date — the
+/// whole point of the F0-11 gate is recomputing the balance from these movements and getting the
+/// same number Octaviano gets today from <c>SUM(Monto)</c> over the same history.
+/// </para>
+///
+/// <para>
+/// <b>Idempotent per member, not per movement.</b> A member's entire movement history is migrated
+/// only if that member currently has <i>zero</i> movements in Fidelizar
+/// (<see cref="IMovimientoRepository.TieneMovimientosAsync"/>) — the same gate
+/// <c>VipPadronImporter</c> already uses for its own single <c>SaldoInicial</c> row. Running this
+/// tool twice therefore cannot duplicate a member's history. The one gap this leaves, accepted
+/// and documented (see the F0-09 report): if a run is interrupted <i>after</i> some of a member's
+/// movements were appended but before all of them were, a re-run sees "this member already has
+/// movements" and will not resume — the DB-level unique index on
+/// <c>(NegocioId, MiembroId, Tipo, ReferenciaVenta)</c> for <c>Acumulacion</c> rows is the other
+/// safety net DATA-MODEL §4 already provides, and every append is still wrapped so one bad row
+/// cannot silently corrupt the rest.
+/// </para>
+/// </summary>
+public sealed class MigradorOctaviano(
+    IOctavianoSource origen,
+    INegocioRepository negocioRepository,
+    IConfiguracionProgramaRepository configuracionRepository,
+    IMiembroRepository miembroRepository,
+    IMovimientoRepository movimientoRepository,
+    IConsentimientoRepository consentimientoRepository)
+{
+    // RN-01 (BUSINESS-RULES.md): 3% of every paid sale, no threshold condition. Same value as
+    // Octaviano's own Octaviano.Core.Services.VipReglas.PorcentajeAcumulacion — this migration
+    // seeds Fidelizar's versioned ConfiguracionPrograma with the number the 293 members' history
+    // was actually computed under, not a fresh guess (DATA-MODEL §1).
+    private const decimal PorcentajeAcumulacionHistorico = 0.03m;
+
+    // RN-06 (BUSINESS-RULES.md): monthly target, accumulated across every branch.
+    private const decimal ObjetivoMensualHistorico = 120_000m;
+
+    private const string TextoConsentimientoMigracion =
+        "Consentimiento verbal registrado al momento del alta como socio del club, migrado desde " +
+        "Octaviano (DATA-MODEL §7, F0-09). No hay un formulario digital anterior que citar como versión.";
+
+    public async Task<ResultadoMigracion> EjecutarAsync(DateTime ahoraUtc, CancellationToken cancellationToken = default)
+    {
+        var negocio = await ObtenerOCrearNegocioAsync(ahoraUtc, cancellationToken);
+
+        var miembrosOctaviano = await origen.LeerMiembrosAsync(cancellationToken);
+        var movimientosOctaviano = await origen.LeerMovimientosAsync(cancellationToken);
+
+        var configuracion = await ObtenerOCrearConfiguracionAsync(
+            negocio.Id, miembrosOctaviano, movimientosOctaviano, ahoraUtc, cancellationToken);
+
+        var (miembrosCreados, miembrosYaExistian, miembrosSalteados, mapaMiembros) =
+            await MigrarMiembrosAsync(negocio.Id, miembrosOctaviano, ahoraUtc, cancellationToken);
+
+        var (consentimientosCreados, consentimientosYaExistian) =
+            await MigrarConsentimientosAsync(negocio.Id, mapaMiembros.Values, cancellationToken);
+
+        var (movimientosMigrados, sociosConHistoriaPrevia, movimientosSalteados) = await MigrarMovimientosAsync(
+            negocio.Id, configuracion.Id, movimientosOctaviano, mapaMiembros, ahoraUtc, cancellationToken);
+
+        return new ResultadoMigracion(
+            NegocioId: negocio.Id,
+            ConfiguracionId: configuracion.Id,
+            MiembrosCreados: miembrosCreados,
+            MiembrosYaExistian: miembrosYaExistian,
+            MiembrosSalteados: miembrosSalteados,
+            MovimientosMigrados: movimientosMigrados,
+            SociosConMovimientosYaMigrados: sociosConHistoriaPrevia,
+            MovimientosSalteados: movimientosSalteados,
+            ConsentimientosCreados: consentimientosCreados,
+            ConsentimientosYaExistian: consentimientosYaExistian);
+    }
+
+    private async Task<Negocio> ObtenerOCrearNegocioAsync(DateTime ahoraUtc, CancellationToken cancellationToken)
+    {
+        var existente = await negocioRepository.ObtenerUnicoAsync(cancellationToken);
+        if (existente is not null)
+        {
+            return existente;
+        }
+
+        // Single-tenant deployment: exactly one row (DATA-MODEL §1). The owner renames it once a
+        // real business name is on hand — this placeholder is deliberately not a guess at one.
+        var nuevo = new Negocio
+        {
+            Nombre = "Negocio migrado de Octaviano (F0-09)",
+            Activo = true,
+            CreadoEn = ahoraUtc,
+        };
+
+        return await negocioRepository.CrearAsync(nuevo, cancellationToken);
+    }
+
+    private async Task<ConfiguracionPrograma> ObtenerOCrearConfiguracionAsync(
+        int negocioId,
+        IReadOnlyList<OctavianoMiembro> miembros,
+        IReadOnlyList<OctavianoMovimiento> movimientos,
+        DateTime ahoraUtc,
+        CancellationToken cancellationToken)
+    {
+        var existente = await configuracionRepository.ObtenerVigenteAsync(negocioId, cancellationToken);
+        if (existente is not null)
+        {
+            return existente;
+        }
+
+        var vigenteDesde = movimientos.Count > 0
+            ? DateOnly.FromDateTime(movimientos.Min(m => m.Fecha))
+            : miembros.Count > 0
+                ? miembros.Min(m => m.FechaAlta)
+                : DateOnly.FromDateTime(ahoraUtc);
+
+        var nueva = new ConfiguracionPrograma
+        {
+            NegocioId = negocioId,
+            PorcentajeAcumulacion = PorcentajeAcumulacionHistorico,
+            ObjetivoMensual = ObjetivoMensualHistorico,
+            GraciaHabilitada = false,
+            MesesDeGracia = null,
+            UmbralMesMalo = null,
+            TopeMesesCongelados = null,
+            VigenteDesde = vigenteDesde,
+            VigenteHasta = null,
+            // Usuario es F1-03 y todavía no existe (igual que Corte.DeclaradoPorUsuarioId y
+            // MovimientoCredito.UsuarioId en el resto del código ya portado). 0 representa
+            // "migración F0-09", no un usuario real.
+            CreadoPorUsuarioId = 0,
+        };
+
+        return await configuracionRepository.CrearAsync(nueva, cancellationToken);
+    }
+
+    private async Task<(int Creados, int YaExistian, IReadOnlyList<RegistroSalteado> Salteados, Dictionary<int, Miembro> Mapa)>
+        MigrarMiembrosAsync(
+            int negocioId,
+            IReadOnlyList<OctavianoMiembro> miembrosOctaviano,
+            DateTime ahoraUtc,
+            CancellationToken cancellationToken)
+    {
+        var creados = 0;
+        var yaExistian = 0;
+        var salteados = new List<RegistroSalteado>();
+        var mapa = new Dictionary<int, Miembro>();
+
+        foreach (var om in miembrosOctaviano)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var clienteExternoId = om.ClienteExternoId.ToString(CultureInfo.InvariantCulture);
+
+            if (string.IsNullOrWhiteSpace(om.Nombre))
+            {
+                salteados.Add(new RegistroSalteado(clienteExternoId, "el nombre está vacío en el origen"));
+                continue;
+            }
+
+            var existente = await miembroRepository.GetByClienteExternoIdAsync(negocioId, clienteExternoId, cancellationToken);
+            if (existente is not null)
+            {
+                yaExistian++;
+                mapa[om.Id] = existente;
+                continue;
+            }
+
+            var nuevo = new Miembro
+            {
+                NegocioId = negocioId,
+                ClienteExternoId = clienteExternoId,
+                NumeroSocio = om.NumeroVip,
+                Nombre = om.Nombre,
+                NombreNormalizado = VipNombres.Normalizar(om.Nombre),
+                Telefono = om.Telefono,
+                Dni = om.Dni,
+                FechaNacimiento = om.FechaNacimiento,
+                // Sucursal queda sin mapear — la misma decisión deliberada que VipPadronImporter
+                // (F0-08) ya tomó: mapear el código de sucursal es un asunto de fase 1 (S10).
+                SucursalId = null,
+                FechaAlta = om.FechaAlta,
+                Activo = om.Activo,
+                ActualizadoEn = ahoraUtc,
+            };
+
+            var creado = await miembroRepository.AddAsync(nuevo, cancellationToken);
+            creados++;
+            mapa[om.Id] = creado;
+        }
+
+        return (creados, yaExistian, salteados, mapa);
+    }
+
+    private async Task<(int Creados, int YaExistian)> MigrarConsentimientosAsync(
+        int negocioId, IEnumerable<Miembro> miembros, CancellationToken cancellationToken)
+    {
+        var creados = 0;
+        var yaExistian = 0;
+
+        TipoConsentimiento[] tipos =
+        [
+            TipoConsentimiento.DatosPersonales,
+            TipoConsentimiento.DatosSensibles,
+            TipoConsentimiento.Comunicaciones,
+        ];
+
+        foreach (var miembro in miembros)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var ocurridoEn = new DateTime(
+                miembro.FechaAlta.Year, miembro.FechaAlta.Month, miembro.FechaAlta.Day, 0, 0, 0, DateTimeKind.Utc);
+
+            foreach (var tipo in tipos)
+            {
+                if (await consentimientoRepository.ExisteAsync(negocioId, miembro.Id, tipo, cancellationToken))
+                {
+                    yaExistian++;
+                    continue;
+                }
+
+                var consentimiento = Consentimiento.Registrar(
+                    negocioId: negocioId,
+                    miembroId: miembro.Id,
+                    tipo: tipo,
+                    otorgado: true,
+                    versionTexto: TextoConsentimientoMigracion,
+                    canal: CanalConsentimiento.MigracionVerbal,
+                    ocurridoEn: ocurridoEn,
+                    registradoPorUsuarioId: null);
+
+                await consentimientoRepository.CrearAsync(consentimiento, cancellationToken);
+                creados++;
+            }
+        }
+
+        return (creados, yaExistian);
+    }
+
+    private async Task<(int Migrados, int SociosConHistoriaPrevia, IReadOnlyList<RegistroSalteado> Salteados)>
+        MigrarMovimientosAsync(
+            int negocioId,
+            int configuracionId,
+            IReadOnlyList<OctavianoMovimiento> movimientosOctaviano,
+            IReadOnlyDictionary<int, Miembro> mapaMiembros,
+            DateTime ahoraUtc,
+            CancellationToken cancellationToken)
+    {
+        var migrados = 0;
+        var sociosConHistoriaPrevia = 0;
+        var salteados = new List<RegistroSalteado>();
+        var hoy = DateOnly.FromDateTime(ahoraUtc);
+
+        var porMiembro = movimientosOctaviano.GroupBy(m => m.MiembroId);
+
+        foreach (var grupo in porMiembro)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!mapaMiembros.TryGetValue(grupo.Key, out var miembro))
+            {
+                // No debería pasar (VipMovimientos.MiembroId es FK), pero si la base tiene un
+                // huérfano no lo inventamos ni lo saltamos en silencio: se reporta con el id
+                // interno de Octaviano — no es un ClienteExternoId, así que se etiqueta distinto.
+                salteados.Add(new RegistroSalteado(
+                    $"(id interno de Octaviano {grupo.Key})",
+                    $"referencia un socio que no existe en VipMiembros — se saltearon {grupo.Count()} movimiento(s)"));
+                continue;
+            }
+
+            var clienteExternoId = miembro.ClienteExternoId ?? $"(Miembro.Id {miembro.Id})";
+
+            if (await movimientoRepository.TieneMovimientosAsync(negocioId, miembro.Id, cancellationToken))
+            {
+                sociosConHistoriaPrevia++;
+                continue;
+            }
+
+            // Cronológico: el historial se aprecia igual sin importar el orden (el saldo es
+            // SUM(Monto), I2), pero mantiene SaldoResultante — evidencia histórica, DATA-MODEL §4
+            // — coherente con el orden real en que pasaron las cosas.
+            var ordenados = grupo.OrderBy(m => m.Fecha).ThenBy(m => m.Id);
+
+            foreach (var om in ordenados)
+            {
+                if (!Enum.IsDefined(typeof(TipoMovimientoCredito), om.Tipo))
+                {
+                    salteados.Add(new RegistroSalteado(clienteExternoId, $"tipo de movimiento desconocido: {om.Tipo}"));
+                    continue;
+                }
+
+                var tipo = (TipoMovimientoCredito)om.Tipo;
+
+                try
+                {
+                    var movimiento = MovimientoCredito.Crear(
+                        negocioId: negocioId,
+                        miembroId: miembro.Id,
+                        fechaEfectiva: DateOnly.FromDateTime(om.Fecha),
+                        registradoEn: ahoraUtc,
+                        tipo: tipo,
+                        monto: Redondeo.Monto(om.Monto),
+                        hoy: hoy,
+                        usuarioId: null,
+                        motivo: string.IsNullOrWhiteSpace(om.Motivo)
+                            ? $"Migrado de Octaviano ({tipo})."
+                            : om.Motivo,
+                        configuracionId: tipo == TipoMovimientoCredito.Acumulacion ? configuracionId : null,
+                        referenciaVenta: om.ReferenciaVenta?.ToString(CultureInfo.InvariantCulture));
+
+                    await movimientoRepository.AppendAsync(movimiento, cancellationToken);
+                    migrados++;
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // El mensaje de una excepción de dominio (ValidationException) o de EF sobre
+                    // una violación de índice único es siempre texto fijo, nunca datos del socio
+                    // — seguro de reportar tal cual.
+                    salteados.Add(new RegistroSalteado(
+                        clienteExternoId,
+                        $"no se pudo migrar un movimiento de tipo {tipo} fechado {om.Fecha:yyyy-MM-dd}: {ex.Message}"));
+                }
+            }
+        }
+
+        return (migrados, sociosConHistoriaPrevia, salteados);
+    }
+}

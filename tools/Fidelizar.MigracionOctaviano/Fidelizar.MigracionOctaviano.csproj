@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Fidelizar.Domain\Fidelizar.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Fidelizar.Infrastructure\Fidelizar.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Owner-authorized 2026-08-12 (F0-09, nuget.org, MIT, official Microsoft package): the only
+      way to read octaviano.db, a SQLite file, read-only. ARCHITECTURE §2's "No SQLite" refers to
+      the product's own database, which stays Postgres — this package is deliberately scoped to
+      this one-off tool project and nowhere near Fidelizar.Infrastructure, so the product never
+      ships a SQLite client that someone could reach for by mistake later (CLAUDE.md condition).
+    -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+  </ItemGroup>
+
+</Project>

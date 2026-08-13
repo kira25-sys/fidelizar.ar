@@ -27,6 +27,15 @@
       build .xlsx fixtures, with no separate PackageReference of its own.
     -->
     <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <!--
+      Task-authorized (F1-03, DATA-MODEL §2 sanctions ASP.NET Core Identity hashing for
+      PasswordHash; nuget.org, MIT): PasswordHasher of TUser's salted PBKDF2-HMACSHA256, wrapped by
+      Fidelizar.Infrastructure.Security.IdentityPasswordHasher behind the Domain-level
+      IPasswordHasher interface, so Application never references this assembly (ARCHITECTURE §3).
+      Core-only package — no EF store, no UserManager, no AspNetUsers table: DATA-MODEL §2 defines
+      Usuario as its own lean entity, not the generic Identity user shape.
+    -->
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.9" />
   </ItemGroup>
 
   <PropertyGroup>

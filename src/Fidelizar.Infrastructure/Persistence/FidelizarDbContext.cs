@@ -24,8 +24,17 @@ public sealed class FidelizarDbContext(DbContextOptions<FidelizarDbContext> opti
 
     public DbSet<Consentimiento> Consentimientos => Set<Consentimiento>();
 
+    public DbSet<Usuario> Usuarios => Set<Usuario>();
+
+    public DbSet<RegistroAuditoria> RegistrosAuditoria => Set<RegistroAuditoria>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Usuario.Email is citext (DATA-MODEL §2, UsuarioConfiguration) so it collides
+        // case-insensitively at the database level — the extension has to exist before any
+        // column can use the type.
+        modelBuilder.HasPostgresExtension("citext");
+
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FidelizarDbContext).Assembly);
         base.OnModelCreating(modelBuilder);
     }

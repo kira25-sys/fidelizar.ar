@@ -1,0 +1,81 @@
+# Example only — copy to the server as compose.yml and fill in every CAMBIAR_ESTO.
+# One of these per business (ARCHITECTURE §5). Never commit the filled-in version.
+
+name: fidelizar-CAMBIAR_ESTO   # the business's short name, e.g. fidelizar-lacentral
+
+services:
+  api:
+    # Built and published by the owner. The image tag is what gets rolled forward on a release,
+    # one client at a time, own shop first (ARCHITECTURE §14).
+    image: CAMBIAR_ESTO/fidelizar:CAMBIAR_ESTO
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy   # migrations run at startup and must not race the database
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      # Double underscore is .NET's separator for nested configuration keys.
+      ConnectionStrings__DefaultConnection: >-
+        Host=db;Port=5432;Database=CAMBIAR_ESTO;Username=CAMBIAR_ESTO;Password=CAMBIAR_ESTO
+    env_file:
+      - .env        # secrets live here, on the server, never in the repository
+    expose:
+      - "8080"      # reached only by Caddy on the internal network, never published to the host
+    volumes:
+      - logs:/app/logs          # Serilog rolling files, retained per client (ARCHITECTURE §14)
+    healthcheck:
+      # The same endpoint the external uptime monitor watches.
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    networks: [interna]
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: CAMBIAR_ESTO
+      POSTGRES_USER: CAMBIAR_ESTO
+      POSTGRES_PASSWORD: CAMBIAR_ESTO
+    volumes:
+      - datos:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U CAMBIAR_ESTO -d CAMBIAR_ESTO"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Deliberately not published to the host: the database is reachable only from this network.
+    # There is no path from the internet to Postgres, and none from Fidelizar to any POS database
+    # either — ingestion is by file or API, always (invariant I9).
+    networks: [interna]
+
+  backup:
+    # Daily dump. Keeping it as its own service means the schedule survives an API restart.
+    image: postgres:17
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: CAMBIAR_ESTO   # same password as POSTGRES_PASSWORD above
+    volumes:
+      - ./backups:/backups
+    entrypoint: >-
+      sh -c 'while true; do
+        pg_dump -h db -U CAMBIAR_ESTO -d CAMBIAR_ESTO
+          | gzip > /backups/fidelizar-$$(date +%Y%m%d-%H%M).sql.gz;
+        find /backups -name "fidelizar-*.sql.gz" -mtime +30 -delete;
+        sleep 86400;
+      done'
+    networks: [interna]
+
+volumes:
+  datos:
+  logs:
+
+networks:
+  interna:
+    driver: bridge

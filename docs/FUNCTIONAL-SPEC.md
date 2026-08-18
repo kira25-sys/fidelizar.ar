@@ -134,7 +134,7 @@ Reached from S3. One screen, three fields.
 | --- | --- |
 | **Monto** | Parsed with `MontoParser` in **typed mode** — the person is known to be an Argentine operator, so `1.500` → 1500 and `1,500` → 1.5 by River Plate convention. Rejected if `≤ 0`, or **greater than the balance** (RN-24, I6). The error names both figures |
 | **Fecha** | Defaults to today. **May be set in the past** (§7 below) |
-| **Motivo** | Optional when the date is today. **Mandatory** when the date is in the past |
+| **Motivo** | **Mandatory, always** — a redemption dated today needs one too (DATA-MODEL §4, enforced by `MovimientoCredito.Crear`). Every line of the ledger says why it exists; that is what makes the balance defensible. S4 offers preset reasons so the cashier taps instead of typing |
 
 On confirmation: a `Canje` movement is written with a negative amount, the acting user's id, and
 the effective date. The new balance is shown immediately.

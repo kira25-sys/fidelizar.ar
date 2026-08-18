@@ -98,15 +98,13 @@ All five carry only data and `System.ComponentModel.DataAnnotations` attributes 
 EF, no business rules (ARCHITECTURE §3). The attributes exist to give the cashier a fast Spanish
 message; the real enforcement is server-side in `Domain`/`Application` regardless.
 
-## A documentation discrepancy found while writing this, not resolved here
+## A documentation discrepancy found while writing this, since resolved
 
-FUNCTIONAL-SPEC §6 (S4) says `Motivo` is "optional when the date is today, mandatory when the
-date is in the past." `MovimientoCredito.Crear` (Domain, already merged) and DATA-MODEL §4 both
-say `Motivo` is mandatory for **every** `Canje`, regardless of date. `RegistrarCanjeRequest` in
-`Shared` marks it `[Required]` to match the code that actually runs — the alternative would let a
-cashier submit a form the server then rejects. Flagging this for the orchestrator rather than
-changing `MovimientoCredito` or FUNCTIONAL-SPEC myself (ARCHITECTURE deviations require
-approval).
+FUNCTIONAL-SPEC §6 (S4) used to say `Motivo` was "optional when the date is today, mandatory when
+the date is in the past", while `MovimientoCredito.Crear` and DATA-MODEL §4 both require it for
+**every** `Canje`. The owner resolved it on 2026-08-18 in favour of the code: `Motivo` is
+mandatory always, and FUNCTIONAL-SPEC §6 was corrected in this same branch. `RegistrarCanjeRequest`
+in `Shared` keeps `[Required]`, which now matches all three.
 
 ## The error shape
 

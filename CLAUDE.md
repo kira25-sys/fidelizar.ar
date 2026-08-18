@@ -65,10 +65,17 @@ One branch per implementation, created from `main`:
 - `chore/<short-description>` — tooling, docs, structure
 - `test/<short-description>` — test-only work
 
-Never commit directly to `main`. Never merge your own branch, and never push — **the owner
-reviews and merges.** There is one developer on this project; "the orchestrator" is the owner,
-working through this session. An agent finishes its branch, reports what it did and what it
-verified, and stops there.
+Never commit directly to `main`, and **never merge — the owner reviews and merges.** There is one
+developer on this project; "the orchestrator" is the owner, working through this session.
+
+**Pushing a branch and opening its pull request is allowed** (decided by the owner 2026-08-18).
+Waiting for the owner to push by hand only delayed the review it was supposed to protect: the
+merge button is the gate, not the push. So an agent finishes its branch, pushes it, opens the PR
+describing what it did and what it verified, and stops there. What it never does is merge, force-push,
+or touch a branch it does not own.
+
+`gh` is installed via WinGet and is **not on `PATH`** — invoke it as
+`"$LOCALAPPDATA/Microsoft/WinGet/Links/gh.exe"`.
 
 ---
 

@@ -55,8 +55,7 @@ Collected from the documents above. None of them may be resolved by an agent on 
 | 3 | Wording of the two consent texts — legal, belongs to the business owner | FUNCTIONAL-SPEC §12 | Phase 1 |
 | 4 | Pricing model — deliberately deferred until a real client asks | Plan §12.2 | Phase 5 |
 | 5 | Which POS the second adapter supports — not decided until a real client asks | Plan §12.3 | Phase 5 |
-| 6 | What `corteFecha` on the wire actually means: `Corte.Fecha` is a fixed one-time program-start date, but the stale-data badge needs a rolling "last import" date — found while writing `F1-02`, not resolved there | DATA-MODEL §3, CANONICAL-FORMAT §6 vs. FUNCTIONAL-SPEC §5, DESIGN-SYSTEM §11.1; full reasoning in FLOW-S2-S5 §0.1 | Phase 1, `F1-06`/`F1-07` |
-| 7 | Idempotency on `POST /miembros/{id}/canjes` — a lost response and a retry could double-write a `Canje`; no key exists on `RegistrarCanjeRequest` today | REST-CONTRACT-F1, FLOW-S2-S5 §3.8 | Phase 1, `F1-07` |
+| 6 | Idempotency on `POST /miembros/{id}/canjes` — a lost response and a retry could double-write a `Canje`; no key exists on `RegistrarCanjeRequest` today | REST-CONTRACT-F1, FLOW-S2-S5 §3.8 | Phase 1, `F1-07` |
 
 **Nothing on this list blocks phase 0.**
 
@@ -83,6 +82,7 @@ All of the below were decided 2026-08-12 unless noted.
 | Balance on the counter screen | **Always visible** — the customer seeing it is part of the hook (RN-12) | FUNCTIONAL-SPEC §13 |
 | Cashier session | **Full login per shift**, no short auto-lock. Trade-off accepted by the owner | FUNCTIONAL-SPEC §13 |
 | Member of another branch | Found and served normally — the program is one and the target is global (RN-07) | FUNCTIONAL-SPEC §13 |
+| What `Corte.Fecha` means | **The date up to which sales data has been loaded, advancing on every import** — not a fixed program-start date. One row per business holds the current value only; the history of every past cutoff lives in `LoteImportacion.CorteDeclarado`, not in a column of its own. Corrects a reading found while writing `F1-02` and resolved the same day | DATA-MODEL §4, decided 2026-08-18 |
 
 ### Technical
 

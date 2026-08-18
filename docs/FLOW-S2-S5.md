@@ -36,30 +36,27 @@ R3 (`ARCHITECTURE.md` §13) and the two-tier badge (`DESIGN-SYSTEM.md` §11.1) a
 What this document adds is *where the badge appears* and *what the cashier can still do while it
 is showing the older tier*.
 
-### 0.1 What the date actually is — **a contradiction found while writing this, flagged, not resolved**
+### 0.1 What the date actually is — **decided by the owner, 2026-08-18**
 
-`DATA-MODEL.md` §3 (`Corte`) describes `Corte.Fecha` as **"the program's start date — from when
-the system counts"**, declared once per business at the first import, with a unique index that
-guarantees exactly one row per `NegocioId`. `CANONICAL-FORMAT.md` §6 confirms the same reading:
-`Corte` is the boundary before which a sale is silently out of scope, not a rolling "last import"
-marker. `REST-CONTRACT-F1.md` says the **implemented** `GET /miembros/{id}/saldo` sources its
-`corteFecha` field from exactly that: `ICorteService.ObtenerCorteVigenteAsync`.
+An earlier draft of this document flagged a real conflict here: `DATA-MODEL.md` §4 (`Corte`) used
+to describe `Corte.Fecha` as "the program's start date," fixed once per business at the first
+import — which cannot be what a badge that flips from neutral to warning past 7 days needs, since
+a one-time date would freeze at go-live and never again say anything true.
 
-But `FUNCTIONAL-SPEC.md` §5 and `DESIGN-SYSTEM.md` §11.1 both describe a date that is supposed to
-move — "sales data arrives weekly," a badge that flips from neutral to warning **past 7 days**,
-the literal label "Datos de ventas al …". A fixed, one-time program-start date cannot do that
-job: days after go-live it would already read as permanently stale (frozen at the same date
-forever), while the two-tier badge would never again say anything true about how recent the
-balance actually is.
+**Resolved, not a contradiction any more.** `Corte.Fecha` is **the date up to which sales data has
+been loaded, and it advances on every import** — weekly or monthly, whenever someone connects,
+brings the file in, and runs it. There is no live connection to a client's POS (I9); this is the
+exact mechanism `ARCHITECTURE.md` §13's R3 already names — "sales data arrives weekly and by hand,
+but the web looks live" — and `Corte.Fecha` is where that gap is measured from. `DATA-MODEL.md` §4
+now reads this way. The behaviour this document designs against was the **correct** one; it is now
+confirmed, not assumed.
 
-**This is a real conflict between binding documents**, not a wording nit, and it sits at the
-centre of the one thing this task was named for (the stale-data warning). I have not resolved
-it — that is a decision about what `corteFecha` on the wire *means*, which is exactly the kind of
-thing `CLAUDE.md` says to stop and ask about, not improvise. What follows assumes the **intended**
-behaviour — a date that reflects the most recent successful `LoteImportacion.EjecutadoEn` for the
-business, which is the only concept in `DATA-MODEL.md` that actually varies week to week — and
-flags every place that assumption touches. See §9 for the full list of what needs an owner/backend
-decision before `F1-06`/`F1-07` build against this.
+One detail that follows from the same decision: `Corte` holds only the **current** vigente date,
+overwritten on every import — it is not a history of every cutoff the business has had. The owner
+was asked directly whether the original program-start date needed preserving in a column of its
+own now that this one moves, and said no: `LoteImportacion.CorteDeclarado` already keeps that,
+one row per import, forever — so nothing in this flow needs a new field to show "when did tracking
+begin" versus "how fresh is this."
 
 ### 0.2 Where the badge appears
 
@@ -575,13 +572,16 @@ than re-derive from prose.
 
 ## 7. Open questions and contradictions found — none resolved unilaterally
 
+One real contradiction was found while writing this document, flagged rather than resolved, and
+has since been settled by the owner: what `Corte.Fecha` actually represents (§0.1). It moved to
+`docs/README.md`'s "Decisions already taken" table and is no longer open. What remains:
+
 | # | What | Where | Why it matters |
 | --- | --- | --- | --- |
-| 1 | **`Corte.Fecha` is a fixed one-time program-start date, not a rolling "last import" date** — but the stale-data badge this task was named for needs the latter. §0.1 has the full reasoning | `DATA-MODEL.md` §3, `CANONICAL-FORMAT.md` §6 vs. `FUNCTIONAL-SPEC.md` §5, `DESIGN-SYSTEM.md` §11.1 | The badge as currently wired (`ICorteService.ObtenerCorteVigenteAsync`) would freeze at go-live and never again say anything true. This is the most important item on this list |
-| 2 | `MiembroResumen` has no cutoff-date field, but R3's "not in any screen" reading requires one on S2's rows too | `openapi-fase1.yaml`, §1.4 | Needs a schema addition before `F1-05` builds S2 as specified here |
-| 3 | Retry after a lost response on S4 submit could double-write a `Canje` — no idempotency mechanism exists in `RegistrarCanjeRequest` today | §3.8 | Money-affecting; needs a backend decision, not a UI one |
-| 4 | Both consent texts | `FUNCTIONAL-SPEC.md` §12 | Already an open decision on record, restated here only because S5 depends on it directly |
-| 5 | Re-authenticating in place (as an overlay) versus a full navigation on a mid-canje `401` | §3.6 point 5 | A recommendation, not a commitment — needs confirmation against how `F1-04c` actually implements session handling |
+| 1 | `MiembroResumen` has no cutoff-date field, but R3's "not in any screen" reading requires one on S2's rows too | `openapi-fase1.yaml`, §1.4 | Needs a schema addition before `F1-05` builds S2 as specified here |
+| 2 | Retry after a lost response on S4 submit could double-write a `Canje` — no idempotency mechanism exists in `RegistrarCanjeRequest` today | §3.8 | Money-affecting; needs a backend decision, not a UI one |
+| 3 | Both consent texts | `FUNCTIONAL-SPEC.md` §12 | Already an open decision on record, restated here only because S5 depends on it directly |
+| 4 | Re-authenticating in place (as an overlay) versus a full navigation on a mid-canje `401` | §3.6 point 5 | A recommendation, not a commitment — needs confirmation against how `F1-04c` actually implements session handling |
 
-None of the above were decided by this document. Items 1–3 and 5 are technical; item 4 is the
+None of the above were decided by this document. Items 1, 2 and 4 are technical; item 3 is the
 owner's, already on record.

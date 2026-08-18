@@ -1,8 +1,10 @@
 # Design system — Fidelizar (F1-01, revised in F1-01b)
 
 What a screen looks like and why, before any screen exists. This document explains the tokens
-in [`design-system/tokens.css`](design-system/tokens.css); that file is the thing to `@import`,
-this document is why it looks the way it does.
+in [`../src/Fidelizar.Client/wwwroot/css/tokens.css`](../src/Fidelizar.Client/wwwroot/css/tokens.css);
+that file is the thing to load, this document is why it looks the way it does. Moved there by
+`F1-04c` once the client shell existed to load it from `wwwroot/css/` (§2, §3, §14) — there is
+only the one copy.
 
 Built for [ARCHITECTURE.md](ARCHITECTURE.md) §2 (Blazor WebAssembly, no CSS framework, no
 downloaded fonts) and for the constraint [FUNCTIONAL-SPEC.md](FUNCTIONAL-SPEC.md) §1 states
@@ -45,6 +47,9 @@ second.** Not two interfaces — one, that answers to both (§8, §9).
 - **No client shell.** `Fidelizar.Client` is still the unmodified WebAssembly template from
   `F0-01` (`F1-04c` replaces it). `tokens.css` lives under `docs/` until that shell exists to
   load it from `wwwroot/css/`.
+  **Resolved by `F1-04c`**: the shell now exists and `tokens.css` moved to
+  `src/Fidelizar.Client/wwwroot/css/tokens.css` — one file, loaded from there, no copy left
+  under `docs/` (§3, §14).
 - **No dependency.** No CSS framework, no icon font, no downloaded webfont. The type scale uses
   the system font stack; anything that looks like an icon is an emoji or an inline SVG drawn by
   whoever builds the screen — both render at zero network cost, which matters on the counter's
@@ -55,15 +60,15 @@ second.** Not two interfaces — one, that answers to both (§8, §9).
   Escape mean, how the result list is driven. Inventing `Ctrl`-combinations for actions is a flow
   decision and belongs to `F1-02`.
 
-## 3. A pre-existing issue, flagged, not fixed
+## 3. A pre-existing issue, flagged, not fixed (resolved by `F1-04c`)
 
-`src/Fidelizar.Client/wwwroot/index.html` still loads `lib/bootstrap/dist/css/bootstrap.min.css`
-and `wwwroot/css/app.css` still carries the template's hardcoded colours (`#1b6ec2`, `#258cfb`,
-plain `red`). That is the stock Blazor WebAssembly template from `F0-01`, untouched since. It is
-not this task's to remove — `F1-01` does not touch `Client` — but whoever builds `F1-04c` should
-delete the Bootstrap reference and the template's `app.css` rules rather than layer this system
-on top of them. Two colour systems in the same page is how a cashier ends up looking at a blue
-that isn't `--color-primary`.
+`src/Fidelizar.Client/wwwroot/index.html` used to load `lib/bootstrap/dist/css/bootstrap.min.css`
+and `wwwroot/css/app.css` carried the template's hardcoded colours (`#1b6ec2`, `#258cfb`,
+plain `red`). That was the stock Blazor WebAssembly template from `F0-01`, untouched since. It
+was not `F1-01`'s task to remove — `F1-01` does not touch `Client` — but `F1-04c` deleted the
+Bootstrap reference, the `lib/bootstrap/` folder and the template's `app.css` rules rather than
+layering this system on top of them. Two colour systems in the same page is how a cashier ends
+up looking at a blue that isn't `--color-primary`.
 
 ---
 

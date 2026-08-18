@@ -2,6 +2,7 @@ using Fidelizar.Api.Auth;
 using Fidelizar.Api.Configurations;
 using Fidelizar.Api.Security;
 using Fidelizar.Application.Services;
+using Fidelizar.Shared.Auth;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -44,7 +45,7 @@ public sealed class AuthController(
 
         Response.Cookies.Append(AuthCookie.Name, token, AuthCookie.Build(expiraUtc));
 
-        return Ok(SesionInfo.DeUsuario(usuario));
+        return Ok(SesionResponseMapper.DeUsuario(usuario));
     }
 
     [HttpPost("logout")]
@@ -67,7 +68,7 @@ public sealed class AuthController(
     [Authorize]
     public IActionResult QuienSoy()
     {
-        var sesion = SesionInfo.DeClaims(User);
+        var sesion = SesionResponseMapper.DeClaims(User);
 
         var (token, expiraUtc) = jwtTokenService.RenovarToken(User);
         Response.Cookies.Append(AuthCookie.Name, token, AuthCookie.Build(expiraUtc));

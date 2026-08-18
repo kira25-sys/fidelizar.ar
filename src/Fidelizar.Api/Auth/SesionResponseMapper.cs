@@ -2,20 +2,22 @@ using System.Globalization;
 using System.Security.Claims;
 using Fidelizar.Api.Security;
 using Fidelizar.Domain.Entities;
+using Fidelizar.Shared.Auth;
 
 namespace Fidelizar.Api.Auth;
 
 /// <summary>
-/// What login and "quién soy" return about the signed-in user — their own identity, never a
-/// member's (no privacy concern: this is the staff member's own name and role, not customer PII).
-/// Deliberately not in <c>Fidelizar.Shared</c>, same reasoning as <see cref="LoginRequest"/>.
+/// Builds the Shared <see cref="SesionResponse"/> DTO from server-side identity sources. Stays in
+/// Api, not Shared: it reads <see cref="Usuario"/> (Domain) and <see cref="ClaimsPrincipal"/> tied
+/// to <see cref="JwtTokenService"/>'s claim names, neither of which Shared may reference
+/// (ARCHITECTURE §3).
 /// </summary>
-public sealed record SesionInfo(int Id, string NombreCompleto, string Rol, int NegocioId, int? SucursalId)
+public static class SesionResponseMapper
 {
-    public static SesionInfo DeUsuario(Usuario usuario) =>
+    public static SesionResponse DeUsuario(Usuario usuario) =>
         new(usuario.Id, usuario.NombreCompleto, usuario.Rol.ToString(), usuario.NegocioId, usuario.SucursalId);
 
-    public static SesionInfo DeClaims(ClaimsPrincipal principal) => new(
+    public static SesionResponse DeClaims(ClaimsPrincipal principal) => new(
         int.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!, CultureInfo.InvariantCulture),
         principal.FindFirstValue(ClaimTypes.Name) ?? string.Empty,
         principal.FindFirstValue(ClaimTypes.Role) ?? string.Empty,

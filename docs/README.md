@@ -10,7 +10,7 @@ Read in this order. Each one assumes the ones above it.
 | [DATA-MODEL.md](DATA-MODEL.md) | Tables, columns, types, indexes and why each exists | Schema decisions |
 | [CANONICAL-FORMAT.md](CANONICAL-FORMAT.md) | The one shape every sale takes before reaching the engine | The ingestion contract |
 | [FUNCTIONAL-SPEC.md](FUNCTIONAL-SPEC.md) | Screen by screen: who sees what, what happens when it fails | Product behaviour |
-| [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) | Colours, type scale, touch targets, states, light/dark, and why — with [`design-system/tokens.css`](design-system/tokens.css) as the CSS to load | What `F1-02` and every screen task build from |
+| [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) | Colours, type scale, control sizes, states, hover, keyboard, breakpoints, light/dark, and why — with [`design-system/tokens.css`](design-system/tokens.css) as the CSS to load | What `F1-02` and every screen task build from |
 | [ROADMAP.md](ROADMAP.md) | The work, phase by phase, task by task, with gates | Sequencing |
 
 > ARCHITECTURE §15 records what is ported from the university project `Dsw2026Tpi` and, just as

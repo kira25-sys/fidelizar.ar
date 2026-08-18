@@ -1,6 +1,28 @@
-﻿<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
-        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-    </Found>
-</Router>
+@inject ISessionService SessionService
+
+@* Session handling is the shell's job (ROADMAP F1-04c): checked once, before any page renders. *@
+@if (_initializing)
+{
+    <div class="page" role="status">
+        <p>Cargando…</p>
+    </div>
+}
+else
+{
+    <Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+        <Found Context="routeData">
+            <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+    </Router>
+}
+
+@code {
+    private bool _initializing = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SessionService.InitializeAsync();
+        _initializing = false;
+    }
+}

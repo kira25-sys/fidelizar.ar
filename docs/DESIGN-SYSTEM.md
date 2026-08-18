@@ -1,8 +1,10 @@
 # Design system — Fidelizar (F1-01, revised in F1-01b)
 
 What a screen looks like and why, before any screen exists. This document explains the tokens
-in [`design-system/tokens.css`](design-system/tokens.css); that file is the thing to `@import`,
-this document is why it looks the way it does.
+in [`../src/Fidelizar.Client/wwwroot/css/tokens.css`](../src/Fidelizar.Client/wwwroot/css/tokens.css);
+that file is the thing to load, this document is why it looks the way it does. Moved there by
+`F1-04c` once the client shell existed to load it from `wwwroot/css/` — there is only the one
+copy (§16).
 
 Built for [ARCHITECTURE.md](ARCHITECTURE.md) §2 (Blazor WebAssembly, no CSS framework, no
 downloaded fonts) and for the constraint [FUNCTIONAL-SPEC.md](FUNCTIONAL-SPEC.md) §1 states
@@ -19,8 +21,8 @@ below exists because of that sentence or because of a numbered rule.
 > exists for keyboard users. §15 lists every change.
 
 `F1-02` (flow design for S2–S5) and every frontend task from `F1-05` on build screens from these
-tokens. This document does not build a screen, and it does not touch `Fidelizar.Client` — that
-project does not exist as a real shell yet (`F1-04c`).
+tokens. This document explains the tokens; it does not build a screen — that stays `F1-02`
+(flow) and `F1-05` on (build).
 
 ---
 
@@ -42,9 +44,8 @@ second.** Not two interfaces — one, that answers to both (§8, §9).
 ## 2. What is out of scope here
 
 - **No screen.** S1–S10 belong to `F1-02` (flow) and `F1-05` onward (build).
-- **No client shell.** `Fidelizar.Client` is still the unmodified WebAssembly template from
-  `F0-01` (`F1-04c` replaces it). `tokens.css` lives under `docs/` until that shell exists to
-  load it from `wwwroot/css/`.
+- **No client shell.** This document is tokens and rules, not the WebAssembly project itself —
+  `F1-04c` builds the shell that loads `tokens.css`; §16 records that move now that it happened.
 - **No dependency.** No CSS framework, no icon font, no downloaded webfont. The type scale uses
   the system font stack; anything that looks like an icon is an emoji or an inline SVG drawn by
   whoever builds the screen — both render at zero network cost, which matters on the counter's
@@ -55,15 +56,15 @@ second.** Not two interfaces — one, that answers to both (§8, §9).
   Escape mean, how the result list is driven. Inventing `Ctrl`-combinations for actions is a flow
   decision and belongs to `F1-02`.
 
-## 3. A pre-existing issue, flagged, not fixed
+## 3. A pre-existing issue, flagged, not fixed (resolved by `F1-04c`)
 
-`src/Fidelizar.Client/wwwroot/index.html` still loads `lib/bootstrap/dist/css/bootstrap.min.css`
-and `wwwroot/css/app.css` still carries the template's hardcoded colours (`#1b6ec2`, `#258cfb`,
-plain `red`). That is the stock Blazor WebAssembly template from `F0-01`, untouched since. It is
-not this task's to remove — `F1-01` does not touch `Client` — but whoever builds `F1-04c` should
-delete the Bootstrap reference and the template's `app.css` rules rather than layer this system
-on top of them. Two colour systems in the same page is how a cashier ends up looking at a blue
-that isn't `--color-primary`.
+`src/Fidelizar.Client/wwwroot/index.html` used to load `lib/bootstrap/dist/css/bootstrap.min.css`
+and `wwwroot/css/app.css` carried the template's hardcoded colours (`#1b6ec2`, `#258cfb`,
+plain `red`). That was the stock Blazor WebAssembly template from `F0-01`, untouched since. It
+was not `F1-01`'s task to remove — `F1-01` does not touch `Client` — but `F1-04c` deleted the
+Bootstrap reference, the `lib/bootstrap/` folder and the template's `app.css` rules rather than
+layering this system on top of them. Two colour systems in the same page is how a cashier ends
+up looking at a blue that isn't `--color-primary`.
 
 ---
 
@@ -547,7 +548,7 @@ screens (`F1-05`+, and `F1-17` under real counter conditions):
 - **Windows high-contrast mode.** The focus ring survives; nothing becomes invisible.
 - **Both themes**, every check above. Dark mode is not a skin — it has its own ratio table.
 
-## 14. Consuming this in `F1-04c` and later
+## 14. Consuming this from `F1-04c` on
 
 1. Load `tokens.css` before any page-specific CSS.
 2. Build components from the primitives in it (`.btn`, `.input`, `.list-row`, `.badge`, `.card`,
@@ -555,8 +556,8 @@ screens (`F1-05`+, and `F1-17` under real counter conditions):
    but every colour, size and radius used must come from a `var(--…)` in this file. A literal hex
    code or pixel value in a Razor component is the same defect a literal `0.03` is in `Domain`
    (ARCHITECTURE §6): the number stops being something this document can be asked to defend.
-3. Remove the template Bootstrap reference and `app.css` rules first (§3) — do not layer this
-   system on top of them.
+3. Done already, by `F1-04c` (§3): the template's Bootstrap reference and `app.css` rules are
+   gone — never layer this system on top of them again.
 4. The markup rules in §9 are part of the contract, not suggestions: no positive `tabindex`, one
    autofocus in the whole product, `disabled` on a busy control, focus returned when a dialog
    closes.
@@ -580,3 +581,11 @@ What did **not** change: the palette (beyond the one border token), the type sca
 and radius scales, the control sizes, the two staleness tiers, the dark-mode mechanism, and every
 decision in §4.4 and §4.5. F1-01's reasoning held; it was the device sentence at the top that
 did not.
+
+## 16. What F1-04c changed
+
+`tokens.css` moved from `docs/design-system/tokens.css` to
+`src/Fidelizar.Client/wwwroot/css/tokens.css`, byte for byte, once the client shell existed to
+load it (§2, §14). No copy was left behind — one file, one place, loaded from `index.html`.
+`F1-04c` also deleted the template's Bootstrap reference and `app.css` rules (§3). No token
+value, size or colour changed.

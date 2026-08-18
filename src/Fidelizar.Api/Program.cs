@@ -89,7 +89,8 @@ public class Program
             app.UseAuthorization();
 
             app.MapControllers();
-            app.MapHealthChecks("/health");
+            // F1-04: a monitoring probe carries no session, so the fallback policy would otherwise reject it with 401.
+            app.MapHealthChecks("/health").AllowAnonymous();
 
             Log.Information("Fidelizar.Api started");
 

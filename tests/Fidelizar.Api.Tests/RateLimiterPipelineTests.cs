@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -90,6 +91,11 @@ public class RateLimiterPipelineTests
             builder.UseSetting(
                 "ConnectionStrings:DefaultConnection",
                 "Host=localhost;Database=CAMBIAR_ESTO;Username=CAMBIAR_ESTO;Password=CAMBIAR_ESTO");
+
+            // F1-03, ARCHITECTURE §8: AddAppAuthentication now runs unconditionally in
+            // Program.cs and validates this key before the host is allowed to start. Generated
+            // at test time, per CLAUDE.md — never written to a configuration file.
+            builder.UseSetting("Jwt:SigningKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(48)));
         }
     }
 }

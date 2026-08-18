@@ -20,11 +20,21 @@ namespace Fidelizar.Infrastructure.Tests.Repositories;
 /// a <c>DbSet</c> for a read also mentions <c>NegocioId</c> somewhere in its own body. Insert-only
 /// members (<c>.Add(</c>) are exempt — DATA-MODEL §1 makes <c>NegocioId</c> a value the caller
 /// supplies on write, not something a query filters by.
+///
+/// <c>Negocios</c> itself is deliberately absent from <see cref="NombresDeDbSet"/> (F1-03): that
+/// table is the tenant root — its rows have an <c>Id</c>, not a <c>NegocioId</c> — so
+/// <c>NegocioRepository.ObtenerUnicoAsync</c> legitimately reads it with no tenant filter at all;
+/// filtering it by "NegocioId" would not even be meaningful. Scanning it here would only produce a
+/// false positive on the one repository method whose entire job is to *resolve* NegocioId in the
+/// first place (see <c>Fidelizar.Domain.Repositories.INegocioRepository</c>).
 /// </summary>
 public class NegocioIdFiltroTests
 {
     private static readonly string[] NombresDeDbSet =
-        ["Negocios", "Sucursales", "Miembros", "MovimientosCredito", "Cortes", "ConfiguracionesPrograma"];
+    [
+        "Sucursales", "Miembros", "MovimientosCredito", "Cortes", "ConfiguracionesPrograma",
+        "Usuarios", "RegistrosAuditoria",
+    ];
 
     [Fact]
     public void Toda_consulta_de_lectura_en_los_repositorios_EF_menciona_NegocioId_en_su_propio_cuerpo()

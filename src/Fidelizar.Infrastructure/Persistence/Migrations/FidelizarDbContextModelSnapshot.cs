@@ -20,6 +20,7 @@ namespace Fidelizar.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.11")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "citext");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Fidelizar.Domain.Entities.ConfiguracionPrograma", b =>
@@ -289,6 +290,45 @@ namespace Fidelizar.Infrastructure.Persistence.Migrations
                     b.ToTable("Negocios", (string)null);
                 });
 
+            modelBuilder.Entity("Fidelizar.Domain.Entities.RegistroAuditoria", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Accion")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Detalle")
+                        .HasColumnType("jsonb");
+
+                    b.Property<int?>("EntidadId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EntidadTipo")
+                        .HasColumnType("text");
+
+                    b.Property<int>("NegocioId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("OcurridoEn")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NegocioId");
+
+                    b.HasIndex("NegocioId", "UsuarioId");
+
+                    b.ToTable("RegistrosAuditoria", (string)null);
+                });
+
             modelBuilder.Entity("Fidelizar.Domain.Entities.Sucursal", b =>
                 {
                     b.Property<int>("Id")
@@ -315,6 +355,51 @@ namespace Fidelizar.Infrastructure.Persistence.Migrations
                     b.HasIndex("NegocioId");
 
                     b.ToTable("Sucursales", (string)null);
+                });
+
+            modelBuilder.Entity("Fidelizar.Domain.Entities.Usuario", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreadoEn")
+                        .HasColumnType("timestamptz");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasColumnType("citext");
+
+                    b.Property<int>("NegocioId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("NombreCompleto")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Rol")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SucursalId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NegocioId");
+
+                    b.HasIndex("NegocioId", "Email")
+                        .IsUnique();
+
+                    b.ToTable("Usuarios", (string)null);
                 });
 #pragma warning restore 612, 618
         }

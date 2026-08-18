@@ -21,8 +21,7 @@ ASPNETCORE_ENVIRONMENT=Production
 ASPNETCORE_HTTP_PORTS=8080
 
 # ---------------------------------------------------------------------------
-# Authentication — arrives with F1-03. The exact variable names are fixed there;
-# this block is a placeholder so nobody is surprised by it on the first deploy.
+# Authentication (F1-03) — mandatory. The application refuses to start without this one too.
 # ---------------------------------------------------------------------------
 
 # Generate it ON THE SERVER and nowhere else:
@@ -30,8 +29,15 @@ ASPNETCORE_HTTP_PORTS=8080
 #
 # It is never committed, not even to a development settings file: a key that touches git is in
 # the history forever and is burned (ARCHITECTURE §8). The application validates it at startup —
-# a missing or short key stops the boot instead of failing on the first login.
-# Jwt__SigningKey=CAMBIAR_ESTO
+# a missing or under-32-byte key stops the boot with a clear message instead of failing on the
+# first login attempt (Jwt:SigningKey bound from this exact variable).
+Jwt__SigningKey=CAMBIAR_ESTO
+
+# Optional — sensible defaults ship in appsettings.json if omitted (Issuer/Audience "Fidelizar",
+# AccessTokenMinutes 15). Override only if a deployment needs something different.
+# Jwt__Issuer=CAMBIAR_ESTO
+# Jwt__Audience=CAMBIAR_ESTO
+# Jwt__AccessTokenMinutes=15
 
 # ---------------------------------------------------------------------------
 # Notes

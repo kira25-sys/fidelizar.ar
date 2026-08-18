@@ -165,12 +165,118 @@ public class FidelizarDbContextModelTests
     [InlineData(typeof(ConfiguracionPrograma), "CreadoPorUsuarioId")]
     public void Columnas_de_UsuarioId_son_escalares_sin_relacion_de_clave_foranea(Type tipoEntidad, string propiedad)
     {
-        // Usuario es F1-03 y todavía no existe: estas columnas deben quedar como int/int? sin
-        // navegación ni FK, hasta que F1-03 agregue la restricción en una migración posterior.
+        // Usuario ya existe (F1-03), pero estas columnas siguen sin FK a propósito: la migración
+        // F0-09 escribió UsuarioPlaceholderMigracion = 0 en estas mismas columnas para los 293
+        // socios ya migrados y verificados contra producción real (ROADMAP, gate F0-11). Una FK
+        // estricta ahora rompería esa base ya migrada apenas se le aplicara la migración, porque
+        // no existe ningún Usuario.Id = 0. Agregar la restricción requiere antes una migración de
+        // datos (o un Usuario "sistema" con ese Id) que el dueño tiene que autorizar — no algo
+        // para decidir en silencio en F1-03 (CLAUDE.md, "ask when in doubt").
         var model = BuildModel();
         var entidad = model.FindEntityType(tipoEntidad)!;
 
         Assert.NotNull(entidad.FindProperty(propiedad));
         Assert.DoesNotContain(entidad.GetForeignKeys(), fk => fk.Properties.Any(p => p.Name == propiedad));
     }
+
+    [Fact]
+    public void Usuario_y_RegistroAuditoria_estan_mapeados()
+    {
+        var model = BuildModel();
+
+        Assert.NotNull(model.FindEntityType(typeof(Usuario)));
+        Assert.NotNull(model.FindEntityType(typeof(RegistroAuditoria)));
+    }
+
+    [Theory]
+    [InlineData(typeof(Usuario), "NegocioId")]
+    [InlineData(typeof(RegistroAuditoria), "NegocioId")]
+    public void Usuario_y_RegistroAuditoria_tienen_NegocioId_no_nullable(Type tipoEntidad, string propiedad)
+    {
+        var entidad = GetEntity(BuildModel(), tipoEntidad);
+        Assert.False(entidad.FindProperty(propiedad)!.IsNullable);
+    }
+
+    [Fact]
+    public void Usuario_Email_es_citext()
+    {
+        var entidad = GetEntity<Usuario>(BuildModel());
+        Assert.Equal("citext", entidad.FindProperty(nameof(Usuario.Email))!.GetColumnType());
+    }
+
+    [Fact]
+    public void Usuario_tiene_indice_unico_por_NegocioId_y_Email()
+    {
+        var entidad = GetEntity<Usuario>(BuildModel());
+
+        var indice = entidad.GetIndexes().Single(i =>
+            i.Properties.Select(p => p.Name).SequenceEqual([nameof(Usuario.NegocioId), nameof(Usuario.Email)]));
+
+        Assert.True(indice.IsUnique);
+    }
+
+    [Fact]
+    public void Usuario_SucursalId_es_nullable_a_nivel_de_esquema()
+    {
+        // DATA-MODEL §2: la obligatoriedad de SucursalId depende del Rol (Cajero/Encargada sí,
+        // Dueno/Soporte no) — Usuario.Crear la exige en Domain, no el esquema (mismo patrón que
+        // ConfiguracionPrograma.ObjetivoMensual).
+        var entidad = GetEntity<Usuario>(BuildModel());
+        Assert.True(entidad.FindProperty(nameof(Usuario.SucursalId))!.IsNullable);
+    }
+
+    [Fact]
+    public void RegistroAuditoria_UsuarioId_no_es_nullable()
+    {
+        var entidad = GetEntity<RegistroAuditoria>(BuildModel());
+        Assert.False(entidad.FindProperty(nameof(RegistroAuditoria.UsuarioId))!.IsNullable);
+    }
+
+    [Fact]
+    public void RegistroAuditoria_Detalle_es_jsonb_y_opcional()
+    {
+        var entidad = GetEntity<RegistroAuditoria>(BuildModel());
+        var propiedad = entidad.FindProperty(nameof(RegistroAuditoria.Detalle))!;
+
+        Assert.Equal("jsonb", propiedad.GetColumnType());
+        Assert.True(propiedad.IsNullable);
+    }
+
+    [Fact]
+    public void La_migracion_AddUsuarioYAuditoria_habilita_la_extension_citext()
+    {
+        // model.GetPostgresExtensions() reads an annotation the RuntimeModelConvention prunes
+        // from DbContext.Model — it only affects migration SQL generation, never
+        // SaveChanges/queries, so BuildModel()'s runtime model does not carry it (unlike every
+        // other assertion in this file, which reads things the runtime model does keep). The
+        // migration file itself is what Postgres actually applies, so it is the authoritative
+        // check that the extension is created before Usuario.Email's citext column needs it.
+        var migrationPath = Path.Combine(
+            FindSolutionRoot(
+                "src", "Fidelizar.Infrastructure", "Persistence", "Migrations",
+                "20260813210033_AddUsuarioYAuditoria.cs"));
+
+        var contenido = File.ReadAllText(migrationPath);
+
+        Assert.Contains("PostgresExtension:citext", contenido, StringComparison.Ordinal);
+    }
+
+    private static string FindSolutionRoot(params string[] relativePathFromRoot)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Fidelizar.sln")))
+        {
+            directory = directory.Parent;
+        }
+
+        if (directory is null)
+        {
+            throw new InvalidOperationException(
+                "Could not locate Fidelizar.sln by walking up from the test output directory.");
+        }
+
+        return Path.Combine([directory.FullName, .. relativePathFromRoot]);
+    }
+
+    private static IEntityType GetEntity(IModel model, Type tipoEntidad) => model.FindEntityType(tipoEntidad)!;
 }

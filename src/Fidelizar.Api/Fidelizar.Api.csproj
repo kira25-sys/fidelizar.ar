@@ -10,6 +10,15 @@
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Settings.Configuration" Version="10.0.1" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <!--
+      Task-authorized (F1-03, ARCHITECTURE §8 names this exact mechanism: "JwtBearer se configura
+      para leer el token de la cookie via OnMessageReceived"; nuget.org, MIT). Not part of the
+      ASP.NET Core shared framework (confirmed by inspecting the installed shared framework
+      directory — only Microsoft.AspNetCore.Identity.dll ships there, not this). Also supplies
+      Microsoft.IdentityModel.JsonWebTokens/Tokens transitively, used by JwtTokenService to sign
+      and issue the token this handler later validates.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
   </ItemGroup>
 
   <PropertyGroup>

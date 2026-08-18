@@ -2,16 +2,10 @@ namespace Fidelizar.Domain.Exceptions;
 
 /// <summary>
 /// Base type for every exception the product throws on purpose (as opposed to a bug). Carries an
-/// error code, a message and optional per-field detail — enough for Fidelizar.Api's
-/// ExceptionHandlingMiddleware to map it to an HTTP status and to the wire-level
-/// Fidelizar.Shared.Errors.ErrorResponse.
-///
-/// Domain deliberately does not know about ErrorResponse or about HTTP: ARCHITECTURE §3 says
-/// Domain depends on nothing, so the translation to the wire contract happens in Api, which is
-/// the only layer that references both Domain and Shared.
-///
-/// Ported from Dsw2026Tpi (ARCHITECTURE §15), adapted: no CrossCutting project, no
-/// ResourceManager-backed error strings (Domain has no file I/O), lands directly in Domain.
+/// error code and optional per-field detail — enough for <c>Fidelizar.Api</c>'s exception
+/// middleware to map it to an HTTP status and to <c>Fidelizar.Shared.Errors.ErrorResponse</c>.
+/// Domain knows nothing about HTTP or that response type (ARCHITECTURE §3): the translation
+/// happens in Api, the only layer referencing both.
 /// </summary>
 public abstract class AppException : Exception
 {

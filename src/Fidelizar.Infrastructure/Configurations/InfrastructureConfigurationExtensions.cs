@@ -1,7 +1,9 @@
 using Fidelizar.Domain.Repositories;
+using Fidelizar.Domain.Security;
 using Fidelizar.Infrastructure.Import;
 using Fidelizar.Infrastructure.Persistence;
 using Fidelizar.Infrastructure.Repositories;
+using Fidelizar.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,6 +35,13 @@ public static class InfrastructureConfigurationExtensions
         services.AddScoped<IMovimientoRepository, MovimientoRepository>();
         services.AddScoped<ICorteRepository, CorteRepository>();
         services.AddScoped<IMiembroRepository, MiembroRepository>();
+        services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+        services.AddScoped<IRegistroAuditoriaRepository, RegistroAuditoriaRepository>();
+        services.AddScoped<INegocioRepository, NegocioRepository>();
+
+        // ARCHITECTURE §3: Application depends on IPasswordHasher only, never on ASP.NET Core
+        // Identity directly — this is the one place that wires the real implementation in.
+        services.AddSingleton<IPasswordHasher, IdentityPasswordHasher>();
 
         // The padron importer (F0-08) is the entry door for every new business. It only depends
         // on Domain repository interfaces, registered just above.

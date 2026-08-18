@@ -1,12 +1,11 @@
 namespace Fidelizar.Domain.Entities;
 
 /// <summary>
-/// The program's start date for one business — from when the system counts (DATA-MODEL §4).
-/// One row per <c>NegocioId</c>, unique at the schema level (F0-03 migration), not by
-/// discipline. Declared at import, never a constant: a hard-coded cutoff double-credits every
-/// purchase between the real cutoff and the import day — Octaviano learned this the hard way.
-/// With no cutoff recorded, accrual must fail loudly rather than invent one (F0-07,
-/// <see cref="Fidelizar.Domain.Repositories.ICorteRepository"/>).
+/// The program's start date for one business — from when the system counts (DATA-MODEL §4). One
+/// row per <c>NegocioId</c>, unique at the schema level. Declared at import, never a constant: a
+/// hard-coded cutoff double-credits every purchase between the real cutoff and the import day,
+/// as Octaviano learned. With no cutoff recorded, accrual fails loudly rather than invent one
+/// (F0-07, <see cref="Fidelizar.Domain.Repositories.ICorteRepository"/>).
 /// </summary>
 public sealed class Corte
 {
@@ -16,11 +15,8 @@ public sealed class Corte
 
     public DateOnly Fecha { get; private set; }
 
-    /// <summary>
-    /// Who declared this cutoff. Scalar column on purpose: <c>Usuario</c> is F1-03 and does not
-    /// exist yet in this wave, so there is no navigation property and no FK constraint here.
-    /// F1-03 introduces <c>Usuario</c> and adds the constraint in a later migration.
-    /// </summary>
+    /// <summary>Who declared this cutoff. Scalar column: the FK to <c>Usuario</c> is added by
+    /// F1-03's migration, not here.</summary>
     public int DeclaradoPorUsuarioId { get; private set; }
 
     public DateTime DeclaradoEn { get; private set; }

@@ -2,6 +2,7 @@ using System.Text;
 using Fidelizar.Api.Options;
 using Fidelizar.Api.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Fidelizar.Api.Configurations;
@@ -86,7 +87,16 @@ public static class AuthenticationConfigurationExtensions
             .AddPolicy(Policies.EncargadaOrAbove, policy =>
                 policy.RequireRole(Roles.Encargada, Roles.Dueno))
             .AddPolicy(Policies.DuenoOnly, policy =>
-                policy.RequireRole(Roles.Dueno));
+                policy.RequireRole(Roles.Dueno))
+            // F1-04: an endpoint with no declared [Authorize]/[AllowAnonymous] must fail closed,
+            // not open (ARCHITECTURE §8, roadmap F1-04). Without this, ASP.NET Core's own default
+            // is anonymous access — the opposite of what the product needs. This does not replace
+            // a role policy: it only guarantees that forgetting one still requires a valid
+            // session, never nothing at all. EveryEndpointDeclaresAuthorizationTests still fails
+            // the build if an action relies on this instead of naming its own policy.
+            .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build());
 
         return services;
     }

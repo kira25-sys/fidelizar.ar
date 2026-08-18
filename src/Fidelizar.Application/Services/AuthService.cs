@@ -28,10 +28,17 @@ public sealed class AuthService(
         var negocio = await negocioRepository.ObtenerUnicoAsync(cancellationToken);
         var usuario = await usuarioRepository.ObtenerPorEmailAsync(negocio.Id, email, cancellationToken);
 
-        // Same outcome whether the email does not exist, the account is deactivated, or the
-        // password is wrong: a login endpoint that distinguishes these is a user-enumeration leak
-        // on a password endpoint exposed to the internet.
-        if (usuario is null || !usuario.Activo || !passwordHasher.Verify(usuario.PasswordHash, password))
+        // RolUsuario.Sistema (F1-03 follow-up) is not a person and never an account — it exists
+        // only to be pointed at from a movement/cutoff/configuration row. Checked before the
+        // password so a Sistema user is never authenticated by any path, coincidental password
+        // match included; the check short-circuits, so passwordHasher.Verify never even runs
+        // against its hash.
+        //
+        // Same outcome whether the email does not exist, the account is deactivated, the role is
+        // Sistema, or the password is wrong: a login endpoint that distinguishes these is a
+        // user-enumeration leak on a password endpoint exposed to the internet.
+        if (usuario is null || usuario.Rol == RolUsuario.Sistema || !usuario.Activo ||
+            !passwordHasher.Verify(usuario.PasswordHash, password))
         {
             throw new AuthenticationException(MensajeCredencialesInvalidas);
         }

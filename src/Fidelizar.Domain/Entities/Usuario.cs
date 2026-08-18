@@ -3,14 +3,9 @@ using Fidelizar.Domain.Exceptions;
 namespace Fidelizar.Domain.Entities;
 
 /// <summary>
-/// A real person with a role, replacing Octaviano's list of Telegram chat IDs (DATA-MODEL §2,
-/// Plan §5). Every <see cref="MovimientoCredito"/> stamps the real actor who caused it — never
-/// <c>telegram:123456</c> — and this is the row that stamp points at.
-///
-/// The constructor is private, like every other entity in this layer: <see cref="Crear"/> is the
-/// only way to build one, so the invariants below (a required <see cref="SucursalId"/> for a
-/// branch-scoped role, none for a business-wide one) cannot be bypassed by constructing the object
-/// some other way — and are testable with no database (ARCHITECTURE §3, §11).
+/// A real person with a role, replacing Octaviano's list of Telegram chat IDs (DATA-MODEL §2).
+/// This is the row a movement's actor stamp points at. Private constructor: <see cref="Crear"/>
+/// is the only way to build one.
 /// </summary>
 public sealed class Usuario
 {
@@ -21,27 +16,23 @@ public sealed class Usuario
     /// <summary>What gets stamped on a movement (DATA-MODEL §2).</summary>
     public string NombreCompleto { get; private set; } = string.Empty;
 
-    /// <summary>
-    /// Unique per <see cref="NegocioId"/>, not global — <c>citext</c> at the database level
-    /// (DATA-MODEL §2), so two accounts differing only in letter case can never coexist.
-    /// </summary>
+    /// <summary>Unique per <see cref="NegocioId"/>, not global. <c>citext</c> at the database
+    /// level, so two accounts differing only in letter case cannot coexist.</summary>
     public string Email { get; private set; } = string.Empty;
 
-    /// <summary>
-    /// ASP.NET Core Identity's hash format (DATA-MODEL §2) — never a plain password, never
-    /// anything this class or any caller reads back.
-    /// </summary>
+    /// <summary>ASP.NET Core Identity's hash format (DATA-MODEL §2) — never a plain password.</summary>
     public string PasswordHash { get; private set; } = string.Empty;
 
     public RolUsuario Rol { get; private set; }
 
     /// <summary>
     /// Required for <see cref="RolUsuario.Cajero"/> and <see cref="RolUsuario.Encargada"/>; null
-    /// for <see cref="RolUsuario.Dueno"/> and <see cref="RolUsuario.Soporte"/> (DATA-MODEL §2).
+    /// for <see cref="RolUsuario.Dueno"/>, <see cref="RolUsuario.Soporte"/> and
+    /// <see cref="RolUsuario.Sistema"/>, none of which is scoped to one branch (DATA-MODEL §2).
     /// </summary>
     public int? SucursalId { get; private set; }
 
-    /// <summary>Deactivation, never deletion — movements reference this row forever (DATA-MODEL §2).</summary>
+    /// <summary>Deactivation, never deletion — movements reference this row forever.</summary>
     public bool Activo { get; private set; }
 
     public DateTime CreadoEn { get; private set; }
@@ -74,9 +65,8 @@ public sealed class Usuario
             throw new ValidationException("PasswordHash es obligatorio.", "PASSWORD_HASH_REQUERIDO");
         }
 
-        // DATA-MODEL §2: SucursalId is required for a branch-scoped role and must stay null for a
-        // business-wide one — a Dueño is never accidentally pinned to one branch, and a Cajero is
-        // never left without one.
+        // DATA-MODEL §2: a Dueño is never accidentally pinned to one branch, and a Cajero is
+        // never left without one. Sistema is business-wide by the same test.
         var requiereSucursal = rol is RolUsuario.Cajero or RolUsuario.Encargada;
 
         if (requiereSucursal && sucursalId is null)
@@ -104,11 +94,8 @@ public sealed class Usuario
         };
     }
 
-    /// <summary>
-    /// Deactivation, never deletion (DATA-MODEL §2) — the only mutation this entity allows after
-    /// <see cref="Crear"/>. The row stays forever so every movement it ever stamped keeps its
-    /// real actor.
-    /// </summary>
+    /// <summary>Deactivation, never deletion — the only mutation allowed after
+    /// <see cref="Crear"/>, so every movement this user stamped keeps its real actor.</summary>
     public void Desactivar()
     {
         Activo = false;

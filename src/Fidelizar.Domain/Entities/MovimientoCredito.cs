@@ -3,16 +3,9 @@ using Fidelizar.Domain.Exceptions;
 namespace Fidelizar.Domain.Entities;
 
 /// <summary>
-/// A single line of the credit ledger — the heart of the product. The table is
-/// <b>append-only</b> (I1): a row is never edited and never deleted, in any layer. There is no
-/// public setter here that lets a caller change a row after <see cref="Crear"/> constructs it,
-/// other than <see cref="FijarSaldoResultante"/>, which only the repository may call, inside the
-/// same transaction as the insert (I2, DATA-MODEL §4).
-///
-/// The constructor is private on purpose: every <see cref="MovimientoCredito"/> in the system
-/// goes through <see cref="Crear"/>, so the invariants below (mandatory <c>Motivo</c>, mandatory
-/// <c>ConfiguracionId</c> for an accrual, the derived <c>Periodo</c>) cannot be bypassed by
-/// constructing the object some other way — and are testable with no database (ARCHITECTURE §3).
+/// A single line of the credit ledger. The table is append-only (I1): a row is never edited and
+/// never deleted, in any layer. The constructor is private so every movement goes through
+/// <see cref="Crear"/> and its invariants cannot be bypassed.
 /// </summary>
 public sealed class MovimientoCredito
 {
@@ -22,8 +15,8 @@ public sealed class MovimientoCredito
 
     public int MiembroId { get; private set; }
 
-    /// <summary>When it happened in the real world. A redemption written on paper during a power
-    /// cut carries the paper's date — distinct from <see cref="RegistradoEn"/>.</summary>
+    /// <summary>When it happened in the real world — a redemption written on paper during a power
+    /// cut carries the paper's date. Distinct from <see cref="RegistradoEn"/>.</summary>
     public DateOnly FechaEfectiva { get; private set; }
 
     /// <summary>When the system learned about it. Always "now" (UTC).</summary>
@@ -40,27 +33,21 @@ public sealed class MovimientoCredito
     /// <summary>The sale's external id. Null for <c>SaldoInicial</c> and <c>Canje</c>.</summary>
     public string? ReferenciaVenta { get; private set; }
 
-    /// <summary>
-    /// Who caused it. Null only for <c>sistema</c>. Scalar column on purpose: <c>Usuario</c> is
-    /// F1-03 and does not exist yet in this wave, so there is no navigation property and no FK
-    /// constraint here. F1-03 introduces <c>Usuario</c> and adds the constraint in a later
-    /// migration.
-    /// </summary>
+    /// <summary>Who caused it. Scalar column: the FK to <c>Usuario</c> is added by F1-03's
+    /// migration, not here.</summary>
     public int? UsuarioId { get; private set; }
 
-    /// <summary>Mandatory for <c>Canje</c>, <c>Ajuste</c>, and any movement with
-    /// <see cref="FechaEfectiva"/> earlier than the day it was registered.</summary>
+    /// <summary>Mandatory for <c>Canje</c>, <c>Ajuste</c>, and any retroactive movement.</summary>
     public string? Motivo { get; private set; }
 
     /// <summary>
-    /// The member's balance right after this movement. Historical evidence only (I2) — never
-    /// the source of an answer. Set by the repository inside the same transaction as the insert,
-    /// because computing it requires reading the current sum from the database.
+    /// The member's balance right after this movement. Historical evidence only (I2), never the
+    /// source of an answer — the balance is always <c>SUM(Monto)</c>.
     /// </summary>
     public decimal SaldoResultante { get; private set; }
 
     /// <summary>Which program configuration produced this movement. Mandatory for
-    /// <c>Acumulacion</c>; null allowed for the other types.</summary>
+    /// <c>Acumulacion</c>.</summary>
     public int? ConfiguracionId { get; private set; }
 
     private MovimientoCredito()
@@ -68,14 +55,13 @@ public sealed class MovimientoCredito
     }
 
     /// <summary>
-    /// The only way to build a <see cref="MovimientoCredito"/>. Validates the invariants that
-    /// DATA-MODEL §4 calls out as easy to get wrong, and derives <see cref="Periodo"/> from
-    /// <paramref name="fechaEfectiva"/> so the two can never disagree.
+    /// The only way to build a <see cref="MovimientoCredito"/>. Validates the invariants
+    /// DATA-MODEL §4 calls out as easy to get wrong, and derives <see cref="Periodo"/> so the two
+    /// can never disagree.
     /// </summary>
     /// <param name="hoy">
-    /// Today's date, used only to decide whether this movement is retroactive (and therefore
-    /// requires a <paramref name="motivo"/>). Passed in rather than read from the clock so the
-    /// rule is testable without a database or a fixed system clock.
+    /// Today's date, used only to decide whether this movement is retroactive. Passed in rather
+    /// than read from the clock so the rule is testable without a fixed system clock.
     /// </param>
     public static MovimientoCredito Crear(
         int negocioId,
@@ -125,10 +111,8 @@ public sealed class MovimientoCredito
     }
 
     /// <summary>
-    /// Records the historical balance snapshot (I2). Only the repository implementation calls
-    /// this, inside the same transaction as the insert — see <c>MovimientoRepository.Append</c>
-    /// in <c>Fidelizar.Infrastructure</c>. Internal so nothing outside that boundary can rewrite
-    /// what is supposed to be a fact about the past.
+    /// Records the historical balance snapshot (I2). Internal so only the repository can call it,
+    /// inside the same transaction as the insert.
     /// </summary>
     internal void FijarSaldoResultante(decimal saldoResultante) => SaldoResultante = saldoResultante;
 }

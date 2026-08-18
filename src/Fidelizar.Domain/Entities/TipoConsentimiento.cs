@@ -1,9 +1,8 @@
 namespace Fidelizar.Domain.Entities;
 
 /// <summary>
-/// What a <see cref="Consentimiento"/> row covers (DATA-MODEL §3). Persisted as <c>int</c> —
-/// values are <b>never reordered and never reused</b>, the same discipline as
-/// <see cref="TipoMovimientoCredito"/>.
+/// What a <see cref="Consentimiento"/> row covers (DATA-MODEL §3). Persisted as <c>int</c>:
+/// values are never reordered and never reused.
 /// </summary>
 public enum TipoConsentimiento
 {

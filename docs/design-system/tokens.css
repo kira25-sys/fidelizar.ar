@@ -1,0 +1,444 @@
+/*
+ * Fidelizar — design tokens (F1-01)
+ *
+ * Rationale for every value lives in docs/DESIGN-SYSTEM.md. This file is the
+ * only place a colour, size or radius is allowed to be a literal — components
+ * built in later tasks (F1-05+) consume these variables, never a hex code.
+ *
+ * Load order: this file first, then component/page CSS. No external fonts,
+ * no CSS framework (ARCHITECTURE §2 — no dependency beyond the stack agreed
+ * there). System font stack only, so the first load on a counter tablet does
+ * not wait on a font download (ARCHITECTURE §14).
+ *
+ * Theming: light is the default on :root. Automatic dark follows the OS via
+ * prefers-color-scheme. A manual override is available through
+ * html[data-theme="light"] / html[data-theme="dark"] for a future settings
+ * toggle (not built here) without needing a second copy of this file.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---------- Colour — light (default) ---------- */
+
+  /* Surfaces */
+  --color-bg: #f3f4f6;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #e7e9ec;
+
+  /* Borders */
+  --color-border: #c9cdd2; /* decorative dividers only — 1.6:1, not for meaning */
+  --color-border-strong: #8a9099; /* input outlines, disabled boundaries — 3.2:1 */
+
+  /* Text */
+  --color-text: #16181b;
+  --color-text-muted: #4a4f55;
+  --color-text-disabled: #9aa0a6; /* exempt from AA — WCAG 1.4.3 excludes disabled text */
+  --color-text-on-primary: #ffffff;
+  --color-text-on-danger: #ffffff;
+
+  /* Brand / primary action */
+  --color-primary: #14509e;
+  --color-primary-hover: #103f7d;
+  --color-primary-active: #0d3567;
+  --color-primary-disabled-bg: var(--color-surface-sunken);
+  --color-primary-disabled-text: var(--color-text-disabled);
+
+  /* Semantic */
+  --color-success: #1e7a3d;
+  --color-success-bg: #e4f3e9;
+  --color-warning: #8a5a00;
+  --color-warning-bg: #fcedd1;
+  --color-danger: #b3261e;
+  --color-danger-bg: #fbe7e5;
+  --color-danger-hover: #8f1e18;
+  --color-danger-active: #741810;
+
+  /* Focus */
+  --color-focus-ring: #0b63ce; /* >=5:1 against both --color-bg and --color-surface */
+
+  /* Shadows — light: soft, low elevation. Never the only signal of a state. */
+  --shadow-sm: 0 1px 2px rgba(20, 23, 26, 0.08);
+  --shadow-modal: 0 8px 24px rgba(20, 23, 26, 0.18);
+
+  /* ---------- Type scale ----------
+   * Base is the browser/OS default (no forced font-size on html), so a
+   * cashier's OS text-size accessibility setting is respected (WCAG 1.4.4).
+   * Sizes below assume a 16px root; all are in rem so they scale with it.
+   */
+  --font-family-base: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --text-xs: 0.875rem;   /* 14px — captions only, never primary content */
+  --text-sm: 1rem;       /* 16px — helper text, secondary labels */
+  --text-base: 1.125rem; /* 18px — default body, inputs, buttons */
+  --text-lg: 1.375rem;   /* 22px — list-row primary line (member name) */
+  --text-xl: 1.75rem;    /* 28px — screen titles */
+  --text-2xl: 2.25rem;   /* 36px — secondary emphasis figures */
+  --text-display: 3.5rem;/* 56px — the balance figure. Read over a shoulder, at a glance */
+
+  --line-height-tight: 1.15;
+  --line-height-normal: 1.4;
+  --line-height-relaxed: 1.6;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  /* ---------- Spacing (4px base unit) ---------- */
+  --space-1: 0.25rem; /* 4px */
+  --space-2: 0.5rem;  /* 8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem;    /* 16px */
+  --space-5: 1.5rem;  /* 24px */
+  --space-6: 2rem;    /* 32px */
+  --space-7: 3rem;    /* 48px */
+  --space-8: 4rem;    /* 64px */
+
+  /* ---------- Radii ---------- */
+  --radius-sm: 6px;   /* inputs, chips */
+  --radius-md: 10px;  /* cards, buttons */
+  --radius-lg: 16px;  /* sheets, alert strip container */
+  --radius-full: 999px; /* pills, badges, icon buttons */
+
+  /* ---------- Touch targets ----------
+   * 44px is the accessibility floor (WCAG 2.5.8 / platform HIGs). This
+   * product sets a higher default because the hand at the counter may be
+   * gloved, wet, or rushed, and a mis-tap credits or debits the wrong person.
+   */
+  --touch-target-min: 44px;         /* absolute floor — small icon buttons only */
+  --touch-target-comfortable: 48px; /* default for inputs, list rows, secondary buttons */
+  --touch-target-primary: 56px;     /* primary CTA: buscar, registrar canje, confirmar */
+  --touch-target-gap-min: 8px;      /* minimum gap between adjacent tappable rows */
+
+  /* ---------- Motion ---------- */
+  --duration-fast: 100ms;
+  --duration-base: 180ms;
+  --easing-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---------- Z-index scale ---------- */
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+}
+
+/* ---------- Colour — dark, automatic via OS preference ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #14171a;
+    --color-surface: #1e2226;
+    --color-surface-sunken: #262b30;
+
+    --color-border: #3a4046; /* decorative — 1.5:1 */
+    --color-border-strong: #6b7178; /* meaningful boundaries — 3.25:1 */
+
+    --color-text: #f2f3f5;
+    --color-text-muted: #b8bec4;
+    --color-text-disabled: #6b7178;
+    --color-text-on-primary: #0b1220; /* dark text — see docs/DESIGN-SYSTEM.md */
+    --color-text-on-danger: #ffffff;
+
+    --color-primary: #5b9bf0;
+    --color-primary-hover: #71a8f5;
+    --color-primary-active: #8ab6f7;
+    --color-primary-disabled-bg: var(--color-surface-sunken);
+    --color-primary-disabled-text: var(--color-text-disabled);
+
+    --color-success: #4caf6d;
+    --color-success-bg: #16301f;
+    --color-warning: #e8a93b;
+    --color-warning-bg: #3a2e12;
+    --color-danger: #f2635c;
+    --color-danger-bg: #3a1613;
+    --color-danger-hover: #f58079;
+    --color-danger-active: #f89b96;
+
+    --color-focus-ring: #7cb0ff;
+
+    --shadow-sm: none; /* shadows barely read on dark — border-strong carries elevation instead */
+    --shadow-modal: 0 8px 24px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* ---------- Colour — dark, manual override ---------- */
+:root[data-theme="dark"] {
+  --color-bg: #14171a;
+  --color-surface: #1e2226;
+  --color-surface-sunken: #262b30;
+
+  --color-border: #3a4046;
+  --color-border-strong: #6b7178;
+
+  --color-text: #f2f3f5;
+  --color-text-muted: #b8bec4;
+  --color-text-disabled: #6b7178;
+  --color-text-on-primary: #0b1220;
+  --color-text-on-danger: #ffffff;
+
+  --color-primary: #5b9bf0;
+  --color-primary-hover: #71a8f5;
+  --color-primary-active: #8ab6f7;
+  --color-primary-disabled-bg: var(--color-surface-sunken);
+  --color-primary-disabled-text: var(--color-text-disabled);
+
+  --color-success: #4caf6d;
+  --color-success-bg: #16301f;
+  --color-warning: #e8a93b;
+  --color-warning-bg: #3a2e12;
+  --color-danger: #f2635c;
+  --color-danger-bg: #3a1613;
+  --color-danger-hover: #f58079;
+  --color-danger-active: #f89b96;
+
+  --color-focus-ring: #7cb0ff;
+
+  --shadow-sm: none;
+  --shadow-modal: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* ---------- Base ---------- */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family-base);
+  font-size: var(--text-base);
+  line-height: var(--line-height-normal);
+}
+
+/* Numeric alignment for money — digits keep a fixed width so a balance
+   reads at a glance instead of re-flowing while it loads or updates. */
+.amount {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Focus is never removed. :focus-visible keeps it off a plain tap while
+   guaranteeing it for keyboard and switch-device navigation. */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Primitives ----------
+ * Generic, screen-agnostic building blocks. No screen is built here (F1-02,
+ * F1-05+) — these exist only so "states" (task scope) have something to be
+ * demonstrated on.
+ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--touch-target-comfortable);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--easing-standard),
+    border-color var(--duration-fast) var(--easing-standard);
+}
+
+.btn--primary {
+  min-height: var(--touch-target-primary);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-lg);
+}
+
+.btn--primary:hover {
+  background: var(--color-primary-hover);
+}
+
+.btn--primary:active {
+  background: var(--color-primary-active);
+}
+
+.btn--secondary {
+  background: var(--color-surface);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+.btn--secondary:hover {
+  background: var(--color-surface-sunken);
+}
+
+.btn--danger {
+  background: var(--color-danger);
+  color: var(--color-text-on-danger);
+}
+
+.btn--danger:hover {
+  background: var(--color-danger-hover);
+}
+
+.btn--danger:active {
+  background: var(--color-danger-active);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  background: var(--color-primary-disabled-bg);
+  border-color: transparent;
+  color: var(--color-primary-disabled-text);
+  cursor: not-allowed;
+}
+
+/* Loading: same footprint, no layout shift, no double submit (ARCHITECTURE §14). */
+.btn[aria-busy="true"] {
+  color: transparent;
+  pointer-events: none;
+  position: relative;
+}
+
+.btn[aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  width: 1.25em;
+  height: 1.25em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  color: var(--color-text-on-primary);
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.input {
+  display: block;
+  width: 100%;
+  min-height: var(--touch-target-comfortable);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--text-base);
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  border-width: 2px;
+}
+
+.input:disabled {
+  background: var(--color-surface-sunken);
+  color: var(--color-text-disabled);
+  border-color: var(--color-border);
+}
+
+.field-error {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--touch-target-comfortable);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.list-row:hover {
+  background: var(--color-surface-sunken);
+}
+
+.list-row:active {
+  background: var(--color-border);
+}
+
+.list-row + .list-row {
+  margin-top: var(--touch-target-gap-min);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.badge--neutral {
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+}
+
+.badge--warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-weight: var(--font-weight-bold);
+}
+
+.badge--danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+}
+
+.badge--success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}

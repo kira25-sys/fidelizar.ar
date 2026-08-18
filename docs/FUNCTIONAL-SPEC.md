@@ -13,10 +13,11 @@ UI text is **Spanish (Argentina)**. Cashiers do not speak English.
 
 That single fact decides more than any preference:
 
-- The counter flow must complete in **under 15 seconds** and in **under 4 taps**.
+- The counter flow must complete in **under 15 seconds** and in **under 4 steps**.
 - Search is the entry point. There is no navigation to learn.
 - Nothing that requires reading a paragraph belongs on the counter screen.
-- Touch targets sized for a finger on a cheap tablet, not a mouse on a desktop.
+- Targets sized for a mouse first and a finger second: the counter runs on the computer the shop
+  already has, and the same screen has to stay usable on a phone.
 - The screen is visible to the customer standing there. **Never render a phone number or DNI on
   the counter screen** (§4, and Plan §5).
 
@@ -58,7 +59,8 @@ density beats speed there.
 
 The cashier's home screen. Nothing else on it.
 
-- A single text field, focused on load, with the on-screen keyboard already up on a tablet.
+- A single text field, focused on load, so the cashier types straight away — and on a touch
+  device the on-screen keyboard comes up on its own.
 - Searches `NombreNormalizado` — accent- and case-insensitive, matching on any word
   (`"gomez ana"` finds `"Ana María Gómez"`).
 - Results appear as the cashier types, from the 3rd character.
@@ -230,7 +232,7 @@ one.
 | Offline mode | Retroactive redemption solves the real case for 5% of the cost (§6) |
 | WhatsApp / email / SMS in phases 1–3 | The cashier's screen costs nothing and converts better. WhatsApp is a later premium tier (Plan §8) |
 | Automatic point expiry | The system **proposes**, a person decides (RN-20). Automatic confiscation of what the member sees as money destroys the program |
-| A mobile app | A responsive web page on the counter tablet is the whole requirement |
+| A mobile app | A responsive web page is the whole requirement: the shop's computer first, phone and tablet on the same page |
 
 ## 12. Open decisions
 

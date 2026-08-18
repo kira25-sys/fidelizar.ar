@@ -1,0 +1,654 @@
+openapi: 3.0.3
+info:
+  title: Fidelizar API — Phase 1 (Counter web)
+  version: "1.0.0-f1"
+  description: >
+    F1-04b's REST contract. Hand-written — no OpenAPI generation package was added
+    (CLAUDE.md: no new dependency without asking; a static document needs none).
+    Endpoints marked `x-status: pending` are contract-only: no controller exists for them
+    because no Application service backs them yet. See docs/REST-CONTRACT-F1.md for the
+    endpoint-by-endpoint rationale and the service each pending one is waiting on.
+servers:
+  - url: /api
+
+tags:
+  - name: Auth
+    description: S1 Ingreso
+  - name: Miembros
+    description: S2, S3, S5, S6, S14
+  - name: Movimientos
+    description: S4, S7, S8
+  - name: Sucursales
+    description: S9, S10
+  - name: Usuarios
+    description: S10
+
+paths:
+  # ---------------------------------------------------------------------
+  # S1 · Ingreso — implemented (F1-03)
+  # ---------------------------------------------------------------------
+  /auth/csrf-token:
+    get:
+      tags: [Auth]
+      summary: Antiforgery token for the login screen (S1)
+      x-status: implemented
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: S1 Ingreso — sign in
+      x-status: implemented
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        "200":
+          description: Signed in. Sets the HttpOnly auth cookie (ARCHITECTURE §8).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SesionResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "429":
+          $ref: '#/components/responses/TooManyRequests'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: S1 — sign out
+      x-status: implemented
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        "204": { description: Signed out. }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: "Quién soy — also renews the session cookie silently (ARCHITECTURE §8)"
+      x-status: implemented
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SesionResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ---------------------------------------------------------------------
+  # S2 · Buscar socio — pending
+  # ---------------------------------------------------------------------
+  /miembros:
+    get:
+      tags: [Miembros]
+      summary: S2 Buscar socio — search by name (FUNCTIONAL-SPEC §4)
+      x-status: pending
+      x-pending-service: >
+        No search method exists on IMiembroRepository and no Application use case wraps
+        one. Needs a query against NombreNormalizado (accent/case-insensitive, any-word
+        match, from the 3rd character) plus homonym disambiguation data (member number,
+        FechaAlta). There is deliberately no "list all members" variant of this endpoint
+        for any role below Dueño (FUNCTIONAL-SPEC §4, ARCHITECTURE §8) — omitting the query
+        parameter must not return a listing.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 3 }
+          description: Cashiers search; there is no browsing (FUNCTIONAL-SPEC §4).
+      responses:
+        "200":
+          description: OK — candidates, each with enough to disambiguate homonyms, never phone/DNI.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MiembroResumen' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Miembros]
+      summary: S5 Alta de socio (FUNCTIONAL-SPEC §7)
+      x-status: pending
+      x-pending-service: >
+        Needs an Application use case that creates the Miembro and, in the same
+        transaction, the mandatory DatosPersonales Consentimiento row (I10) — and the
+        optional DatosSensibles one that gates diet/allergy fields. IMiembroRepository
+        only has AddAsync today; nothing composes it with Consentimiento.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AltaMiembroRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MiembroResumen' }
+        "400":
+          $ref: '#/components/responses/BadRequest'
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ---------------------------------------------------------------------
+  # S3 · Ficha del socio — partially implemented
+  # ---------------------------------------------------------------------
+  /miembros/{miembroId}/saldo:
+    get:
+      tags: [Miembros]
+      summary: S3 Ficha del socio — balance and cutoff date only
+      x-status: implemented
+      description: >
+        Implemented because it is backed entirely by existing services (ISaldoService +
+        ICorteService). Known gap: cannot distinguish an unknown miembroId from a member
+        whose balance is genuinely zero — both return 0, since no Miembro lookup exists
+        yet to check the id is real. See docs/REST-CONTRACT-F1.md.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/MiembroId'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SaldoMiembroResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "409":
+          description: No Corte declared for this Negocio yet (CORTE_NO_DECLARADO).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /miembros/{miembroId}/ficha-mostrador:
+    get:
+      tags: [Miembros]
+      summary: S3 Ficha del socio — the full counter view (name, number, alerts)
+      x-status: pending
+      x-pending-service: >
+        Needs IMiembroRepository.GetByIdAsync (does not exist) plus an alert-building use
+        case: birthday (RN-11, needs only Miembro), allergy/diet (needs Consentimiento +
+        PerfilMiembro — PerfilMiembro is phase 3, F3-01). Until then the counter screen can
+        only show what /miembros/{id}/saldo returns.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/MiembroId'
+      responses:
+        "200":
+          description: OK — never phone or DNI for a Cajero (FUNCTIONAL-SPEC §5).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FichaMostradorResponse' }
+
+  /miembros/{miembroId}/completo:
+    get:
+      tags: [Miembros]
+      summary: S6 Ficha completa (Encargada/Dueño only)
+      x-status: pending
+      x-pending-service: >
+        Needs the same Miembro lookup as ficha-mostrador plus phone/DNI/consent history, and
+        must write a RegistroAuditoria row ("VerFichaCompleta", DATA-MODEL §2) on every read
+        — no Application service does either today.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/MiembroId'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FichaCompletaResponse' }
+
+  # ---------------------------------------------------------------------
+  # S4 · Registrar canje — implemented
+  # ---------------------------------------------------------------------
+  /miembros/{miembroId}/canjes:
+    post:
+      tags: [Movimientos]
+      summary: S4 Registrar canje (FUNCTIONAL-SPEC §6)
+      x-status: implemented
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/MiembroId'
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistrarCanjeRequest' }
+      responses:
+        "200":
+          description: Redemption registered — the new balance, shown immediately.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CanjeResponse' }
+        "400":
+          description: >
+            MONTO_INVALIDO (≤ 0), CANJE_SUPERA_SALDO (I6/RN-24) or SALDO_EN_REVISION (RN-25).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  # ---------------------------------------------------------------------
+  # S7 · Historial de movimientos — pending
+  # ---------------------------------------------------------------------
+  /miembros/{miembroId}/movimientos:
+    get:
+      tags: [Movimientos]
+      summary: S7 Historial de movimientos (Encargada/Dueño only)
+      x-status: pending
+      x-pending-service: >
+        IMovimientoRepository.GetPorMiembroAsync already exists, but no Application use
+        case wraps it — a controller must not call a repository directly (ARCHITECTURE §3),
+        so an endpoint here needs a small IHistorialMovimientosService first.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/MiembroId'
+      responses:
+        "200":
+          description: OK — newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MovimientoResponse' }
+
+  # ---------------------------------------------------------------------
+  # S8 · Anular movimiento — pending
+  # ---------------------------------------------------------------------
+  /movimientos/{movimientoId}/anular:
+    post:
+      tags: [Movimientos]
+      summary: S8 Anular movimiento — writes an Ajuste, never an edit (I1)
+      x-status: pending
+      x-pending-service: >
+        Needs an IAnulacionMovimientoService: looks up the original movement, writes a new
+        Ajuste of -Monto with a mandatory reason and the acting user (I1, I3). No such
+        service or repository lookup-by-id exists on IMovimientoRepository today.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: movimientoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnularMovimientoRequest' }
+      responses:
+        "200":
+          description: OK — the Ajuste that corrects the original movement.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MovimientoResponse' }
+
+  # ---------------------------------------------------------------------
+  # S9 · Cierre diario de canjes — pending
+  # ---------------------------------------------------------------------
+  /sucursales/{sucursalId}/cierre-diario:
+    get:
+      tags: [Sucursales]
+      summary: S9 Cierre diario de canjes (Encargada/Dueño only)
+      x-status: pending
+      x-pending-service: >
+        Needs an ICierreDiarioService that reads a branch's Canje movements for one day
+        with member, cashier and reason — no such aggregation exists yet.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: sucursalId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: fecha
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CierreDiarioResponse' }
+
+  # ---------------------------------------------------------------------
+  # S10 · Usuarios y sucursales — pending
+  # ---------------------------------------------------------------------
+  /usuarios:
+    get:
+      tags: [Usuarios]
+      summary: S10 Usuarios — list (Dueño only)
+      x-status: pending
+      x-pending-service: >
+        IUsuarioRepository has no list method and no Application service wraps user
+        management — only ObtenerPorEmailAsync/CrearAsync/DesactivarAsync exist, used by
+        AuthService for login. Needs an IUsuarioService for S10's CRUD.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/UsuarioResponse' }
+    post:
+      tags: [Usuarios]
+      summary: S10 Usuarios — create (Dueño only)
+      x-status: pending
+      x-pending-service: Same IUsuarioService gap as the GET above.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearUsuarioRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsuarioResponse' }
+
+  /sucursales:
+    get:
+      tags: [Sucursales]
+      summary: S10 Sucursales — list (Dueño only)
+      x-status: pending
+      x-pending-service: No ISucursalRepository/ISucursalService exists yet.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SucursalResponse' }
+    post:
+      tags: [Sucursales]
+      summary: S10 Sucursales — create (Dueño only)
+      x-status: pending
+      x-pending-service: Same ISucursalService gap as the GET above.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearSucursalRequest' }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SucursalResponse' }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: fidelizar_auth
+      description: >
+        JWT in an HttpOnly, Secure, SameSite=Strict cookie (ARCHITECTURE §8). Every
+        state-changing request additionally requires the X-CSRF-TOKEN header.
+
+  parameters:
+    MiembroId:
+      name: miembroId
+      in: path
+      required: true
+      schema: { type: integer }
+    CsrfHeader:
+      name: X-CSRF-TOKEN
+      in: header
+      required: true
+      schema: { type: string }
+      description: From GET /auth/csrf-token. Required on every state-changing request (ARCHITECTURE §8).
+
+  responses:
+    Unauthorized:
+      description: No valid session, or the role lacks the required policy.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    BadRequest:
+      description: Validation failure — see `details` for the offending field(s).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    TooManyRequests:
+      description: Login rate limit exceeded (ARCHITECTURE §8).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  schemas:
+    # ---- The one error shape every endpoint uses (Fidelizar.Shared.Errors.ErrorResponse) ----
+    ErrorResponse:
+      type: object
+      required: [errorCode, message]
+      properties:
+        errorCode: { type: string, example: CANJE_SUPERA_SALDO }
+        message: { type: string, example: "El canje ($150.00) supera el saldo disponible ($100.00)." }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              issue: { type: string }
+
+    # ---- Implemented (Fidelizar.Shared) ----
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+
+    SesionResponse:
+      type: object
+      required: [id, nombreCompleto, rol, negocioId]
+      properties:
+        id: { type: integer }
+        nombreCompleto: { type: string }
+        rol: { type: string, enum: [Cajero, Encargada, Dueno, Soporte] }
+        negocioId: { type: integer }
+        sucursalId: { type: integer, nullable: true }
+
+    SaldoMiembroResponse:
+      type: object
+      required: [miembroId, saldo, corteFecha]
+      properties:
+        miembroId: { type: integer }
+        saldo: { type: number, format: double, description: "decimal on the wire; 2 decimals (I4)" }
+        corteFecha: { type: string, format: date }
+
+    RegistrarCanjeRequest:
+      type: object
+      required: [monto, fechaEfectiva, motivo]
+      properties:
+        monto: { type: number, format: double, minimum: 0.01 }
+        fechaEfectiva: { type: string, format: date, description: "May be in the past (ARCHITECTURE §10)." }
+        motivo:
+          type: string
+          description: >
+            Marked required here because MovimientoCredito.Crear currently requires it for
+            every Canje regardless of date. FUNCTIONAL-SPEC §6 describes it as optional when
+            fechaEfectiva is today — a real discrepancy between the two documents, flagged
+            in docs/REST-CONTRACT-F1.md, not resolved by this contract.
+
+    CanjeResponse:
+      type: object
+      required: [movimientoId, monto, fechaEfectiva, saldoResultante]
+      properties:
+        movimientoId: { type: integer, format: int64 }
+        monto: { type: number, format: double }
+        fechaEfectiva: { type: string, format: date }
+        saldoResultante: { type: number, format: double, description: "Historical evidence only (I2), never re-derived from this." }
+
+    # ---- Pending — documented shape, not yet a C# type in Shared ----
+    MiembroResumen:
+      type: object
+      description: S2 search result row — name, member number, balance. Nothing else (FUNCTIONAL-SPEC §4).
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        numeroSocio: { type: string, nullable: true }
+        saldo: { type: number, format: double }
+        fechaAlta: { type: string, format: date, description: Shown only to disambiguate homonyms. }
+
+    FichaMostradorResponse:
+      type: object
+      description: S3 full counter view — never phone or DNI for a Cajero.
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        numeroSocio: { type: string, nullable: true }
+        saldo: { type: number, format: double }
+        corteFecha: { type: string, format: date }
+        alertas:
+          type: array
+          items:
+            type: object
+            properties:
+              tipo: { type: string, enum: [SaldoDisponible, Cumpleanos, AlergiaODieta, ComprasHabituales] }
+              texto: { type: string }
+
+    FichaCompletaResponse:
+      type: object
+      description: S6 — Encargada/Dueño only.
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        numeroSocio: { type: string, nullable: true }
+        clienteExternoId: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        dni: { type: string, nullable: true }
+        fechaNacimiento: { type: string, nullable: true, description: "Day and month only, RN-11." }
+        sucursalId: { type: integer, nullable: true }
+        activo: { type: boolean }
+
+    AltaMiembroRequest:
+      type: object
+      description: S5 — consent is part of the form, not an afterthought (I10).
+      required: [nombre, consentimientoDatosPersonales]
+      properties:
+        nombre: { type: string }
+        clienteExternoId: { type: string, nullable: true }
+        telefono: { type: string, nullable: true }
+        dni: { type: string, nullable: true }
+        fechaNacimientoDia: { type: integer, nullable: true }
+        fechaNacimientoMes: { type: integer, nullable: true }
+        sucursalId: { type: integer, nullable: true }
+        consentimientoDatosPersonales: { type: boolean, description: "Must be true — explicit checkbox." }
+        consentimientoDatosSensibles: { type: boolean, description: "Without it, diet/allergy fields are not shown at all (I10)." }
+
+    MovimientoResponse:
+      type: object
+      description: S7/S8 — one ledger row.
+      properties:
+        id: { type: integer, format: int64 }
+        tipo: { type: string, enum: [SaldoInicial, Acumulacion, Canje, Ajuste] }
+        monto: { type: number, format: double }
+        fechaEfectiva: { type: string, format: date }
+        registradoEn: { type: string, format: date-time }
+        motivo: { type: string, nullable: true }
+        saldoResultante: { type: number, format: double }
+        usuarioNombre: { type: string, nullable: true }
+
+    AnularMovimientoRequest:
+      type: object
+      required: [motivo]
+      properties:
+        motivo: { type: string, description: "Mandatory — every Ajuste needs one (I3)." }
+
+    CierreDiarioResponse:
+      type: object
+      description: S9 — today's redemptions in one branch.
+      properties:
+        sucursalId: { type: integer }
+        fecha: { type: string, format: date }
+        totalCanjeado: { type: number, format: double }
+        movimientos:
+          type: array
+          items:
+            type: object
+            properties:
+              miembroNombre: { type: string }
+              monto: { type: number, format: double }
+              cajeroNombre: { type: string }
+              hora: { type: string, format: date-time }
+              motivo: { type: string, nullable: true }
+
+    UsuarioResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        nombreCompleto: { type: string }
+        email: { type: string, format: email }
+        rol: { type: string, enum: [Cajero, Encargada, Dueno, Soporte] }
+        sucursalId: { type: integer, nullable: true }
+        activo: { type: boolean }
+
+    CrearUsuarioRequest:
+      type: object
+      required: [nombreCompleto, email, password, rol]
+      properties:
+        nombreCompleto: { type: string }
+        email: { type: string, format: email }
+        password: { type: string, format: password }
+        rol: { type: string, enum: [Cajero, Encargada, Dueno, Soporte] }
+        sucursalId: { type: integer, nullable: true, description: "Required for Cajero/Encargada." }
+
+    SucursalResponse:
+      type: object
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        codigoExterno: { type: string, nullable: true }
+        activa: { type: boolean }
+
+    CrearSucursalRequest:
+      type: object
+      required: [nombre]
+      properties:
+        nombre: { type: string }
+        codigoExterno: { type: string, nullable: true }
+
+security:
+  - cookieAuth: []

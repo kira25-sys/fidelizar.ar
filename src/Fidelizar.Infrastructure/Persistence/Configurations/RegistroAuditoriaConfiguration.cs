@@ -24,6 +24,11 @@ public sealed class RegistroAuditoriaConfiguration : IEntityTypeConfiguration<Re
         builder.Property(r => r.UsuarioId).IsRequired();
         builder.HasIndex(r => new { r.NegocioId, r.UsuarioId });
 
+        // FK to Usuario, no navigation property either side. No placeholder data exists here
+        // (this table has no writer yet), so the constraint is added directly, unlike the four
+        // columns F0-09 already wrote UsuarioPlaceholderMigracion into.
+        builder.HasOne<Usuario>().WithMany().HasForeignKey(r => r.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Property(r => r.Accion).IsRequired();
 
         builder.Property(r => r.EntidadTipo);

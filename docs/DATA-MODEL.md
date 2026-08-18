@@ -207,20 +207,31 @@ never be credited twice.
 
 ### `Corte`
 
-The program's start date — from when the system counts. **One per business now**, not global
-(Plan §6).
+**The date up to which sales data has been loaded** — not a program-start date. There is no live
+connection to a client's POS (I9): someone connects weekly or monthly, brings the data in by
+file, and that import moves this date forward. This is the exact mechanism behind
+`ARCHITECTURE.md` §13's R3 — the web looks live, the data is not, and this table is where that
+gap actually lives. **One row per business**, holding the currently vigente value, not global
+(Plan §6). Decided by the owner 2026-08-18, correcting an earlier reading of this column as fixed
+at go-live.
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `Id` | `int` PK | |
 | `NegocioId` | `int` FK | Unique — the schema, not discipline, guarantees one cutoff per business |
-| `Fecha` | `date` | |
-| `DeclaradoPorUsuarioId` | `int` FK | |
-| `DeclaradoEn` | `timestamptz` | |
+| `Fecha` | `date` | The vigente cutoff. Advances on every import — this row is the current value, not a history |
+| `DeclaradoPorUsuarioId` | `int` FK | Who ran the import that last advanced it |
+| `DeclaradoEn` | `timestamptz` | When it last advanced |
 
 Declared at import, never a constant. Octaviano learned this the hard way: a hard-coded cutoff
 double-credits every purchase between the real cutoff and the import day. **With no cutoff
 recorded, accrual must fail loudly rather than invent one.**
+
+Advancing `Fecha` overwrites the previous value; this row is not a history of every cutoff the
+business has had. It does not need to be — the full history already lives in
+`LoteImportacion.CorteDeclarado`, one row per import, forever. Asked directly whether the
+original program-start date needed a column of its own now that this one moves, the owner said
+no: the first `LoteImportacion` row already preserves it (2026-08-18).
 
 ---
 

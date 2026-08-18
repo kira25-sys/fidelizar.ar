@@ -11,6 +11,7 @@ Read in this order. Each one assumes the ones above it.
 | [CANONICAL-FORMAT.md](CANONICAL-FORMAT.md) | The one shape every sale takes before reaching the engine | The ingestion contract |
 | [FUNCTIONAL-SPEC.md](FUNCTIONAL-SPEC.md) | Screen by screen: who sees what, what happens when it fails | Product behaviour |
 | [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) | Colours, type scale, control sizes, states, hover, keyboard, breakpoints, light/dark, and why — with [`design-system/tokens.css`](design-system/tokens.css) as the CSS to load | What `F1-02` and every screen task build from |
+| [FLOW-S2-S5.md](FLOW-S2-S5.md) | S2–S5 flow by flow: every state, every unhappy path, the exact Spanish copy — the homonym case and the stale-data warning in full | What `F1-05` through `F1-09` build from |
 | [ROADMAP.md](ROADMAP.md) | The work, phase by phase, task by task, with gates | Sequencing |
 
 > ARCHITECTURE §15 records what is ported from the university project `Dsw2026Tpi` and, just as
@@ -54,6 +55,7 @@ Collected from the documents above. None of them may be resolved by an agent on 
 | 3 | Wording of the two consent texts — legal, belongs to the business owner | FUNCTIONAL-SPEC §12 | Phase 1 |
 | 4 | Pricing model — deliberately deferred until a real client asks | Plan §12.2 | Phase 5 |
 | 5 | Which POS the second adapter supports — not decided until a real client asks | Plan §12.3 | Phase 5 |
+| 6 | Idempotency on `POST /miembros/{id}/canjes` — a lost response and a retry could double-write a `Canje`; no key exists on `RegistrarCanjeRequest` today | REST-CONTRACT-F1, FLOW-S2-S5 §3.8 | Phase 1, `F1-07` |
 
 **Nothing on this list blocks phase 0.**
 
@@ -80,6 +82,7 @@ All of the below were decided 2026-08-12 unless noted.
 | Balance on the counter screen | **Always visible** — the customer seeing it is part of the hook (RN-12) | FUNCTIONAL-SPEC §13 |
 | Cashier session | **Full login per shift**, no short auto-lock. Trade-off accepted by the owner | FUNCTIONAL-SPEC §13 |
 | Member of another branch | Found and served normally — the program is one and the target is global (RN-07) | FUNCTIONAL-SPEC §13 |
+| What `Corte.Fecha` means | **The date up to which sales data has been loaded, advancing on every import** — not a fixed program-start date. One row per business holds the current value only; the history of every past cutoff lives in `LoteImportacion.CorteDeclarado`, not in a column of its own. Corrects a reading found while writing `F1-02` and resolved the same day | DATA-MODEL §4, decided 2026-08-18 |
 
 ### Technical
 

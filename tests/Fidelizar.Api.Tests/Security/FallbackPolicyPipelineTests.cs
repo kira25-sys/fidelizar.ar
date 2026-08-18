@@ -48,6 +48,26 @@ public class FallbackPolicyPipelineTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    /// <summary>
+    /// Regression guard: <c>MapHealthChecks</c> is not a controller action, so it carries no
+    /// <c>[Authorize]</c>/<c>[AllowAnonymous]</c> metadata of its own and the fallback policy
+    /// above applies to it exactly like it would to a forgotten controller action — a monitoring
+    /// probe has no session to present. <c>Program.cs</c> now calls <c>.AllowAnonymous()</c> on
+    /// the health check endpoint explicitly; this asserts the exact status, not merely "not a
+    /// rate-limit rejection", which is what let the regression through <c>RateLimiterPipelineTests</c>
+    /// unnoticed (ARCHITECTURE §14, roadmap F1-18).
+    /// </summary>
+    [Fact]
+    public async Task El_health_check_responde_200_a_un_pedido_anonimo()
+    {
+        using var factory = new ApiFactoryConSinAtributo();
+        var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
     /// <summary>Same "Testing" hosting environment as <see cref="RateLimiterPipelineTests"/>, for
     /// the same reason — CI has no Postgres, and this test is only about the HTTP pipeline.
     /// Additionally wires <see cref="SinAtributoTestController"/> into the real

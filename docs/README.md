@@ -96,3 +96,4 @@ All of the below were decided 2026-08-12 unless noted.
 | Real member data | Readable **only** by F0-09 and F0-11, read-only, nothing personal ever written down | CLAUDE.md |
 | Phase 0 gate | **Three-way** balance comparison: Postgres vs Octaviano vs the owner's spreadsheet | ROADMAP phase 0 |
 | CI trigger | **`push` only, not `pull_request`** — one check per commit instead of two. The owner reviews and merges every PR by hand (decided 2026-08-13) | ARCHITECTURE §14 |
+| Target device | **The shop's computer first**, then phone and tablet — one responsive web page, never a tablet-specific UI. Replaces the earlier "cheap counter tablet" premise (decided 2026-08-18) | FUNCTIONAL-SPEC §1, ROADMAP F1-17 |

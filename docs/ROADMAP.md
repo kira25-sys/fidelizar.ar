@@ -84,11 +84,13 @@ members by `ClienteExternoId` and lives wherever `--salida` pointed, outside the
 ## Phase 1 — Counter web
 
 > **Gate:** the 5 branches operate through the web and the VIP bot is no longer used to redeem —
-> verified on a real counter tablet over a real branch's WiFi (F1-17), not only on a dev machine.
+> verified on the computer a branch actually uses, over that branch's real connection (F1-17),
+> not only on a dev machine.
 
 | # | Task | Role | Depends on |
 | --- | --- | --- | --- |
-| F1-01 | Design system: colours, type scale, touch target sizes, states, light and dark. Built for a cheap tablet at counter distance | UX | — |
+| F1-01 | Design system: colours, type scale, target sizes, states, light and dark. Built for the shop's computer first, and responsive down to a phone | UX | — |
+| F1-01b | Design system revision for a computer first: hover states, keyboard navigation, focus order, and what a wide screen shows that a narrow one does not. Follows the platform decision of 2026-08-18 | UX | F1-01 |
 | F1-02 | Flow design for S2–S5, including the homonym case and the stale-data warning | UX | F1-01 |
 | F1-03 | Identity: `Usuario`, roles, branches, `RegistroAuditoria`, and **JWT-in-`HttpOnly`-cookie authentication** — key from the environment and validated at startup, UTC expiry, antiforgery on state-changing endpoints, rate-limited login verified to be in the pipeline (ARCHITECTURE §8) | BE | F0-03 |
 | F1-04 | Authorisation enforced **server-side on every endpoint**, per role, per branch | BE | F1-03 |
@@ -106,7 +108,7 @@ members by `ClienteExternoId` and lives wherever `--salida` pointed, outside the
 | F1-14 | "Socios sin vincular": list of members without `ClienteExternoId` and the linking flow, for `Encargada`/`Dueno` — a counter-registered member must not stay unlinked silently | FE + BE | F1-09 |
 | F1-15 | **Permission matrix tests, run against the API**: every role against every endpoint, including the negatives — a cashier must not reach a phone number by calling the endpoint directly, with no screen involved | QA-F | F1-13 |
 | F1-16 | End-to-end counter flow: search → record → redeem, under 15 seconds | QA-F | F1-12 |
-| F1-17 | **Real counter conditions**: the whole flow on a real cheap tablet over a real branch's WiFi. Measure first-load time; a request failing mid-flow shows a clear Spanish message, never loses a half-filled form and never submits it twice (ARCHITECTURE §14) | QA-F | F1-16 |
+| F1-17 | **Real counter conditions**: the whole flow on the computer a branch actually uses, over that branch's real connection. Measure first-load time; a request failing mid-flow shows a clear Spanish message, never loses a half-filled form and never submits it twice (ARCHITECTURE §14) | QA-F | F1-16 |
 | F1-18 | Uptime check per instance alerting to the phone + structured logs retained per client (ARCHITECTURE §14) | BE | F1-16 |
 
 ## Phase 2 — Ticket line ingestion ⭐

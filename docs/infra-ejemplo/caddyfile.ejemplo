@@ -9,7 +9,7 @@ CAMBIAR_ESTO.fidelizar.ar {
 	encode gzip zstd
 
 	header {
-		# The counter tablet's browser holds a session cookie for a system that moves money.
+		# The counter browser holds a session cookie for a system that moves money.
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"

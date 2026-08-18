@@ -93,7 +93,7 @@ with no database.
 orchestrating `Domain` and the repository interfaces. It knows nothing about HTTP or EF either.
 
 **`Client` never references `Domain`, `Application` or `Infrastructure`.** Everything the client
-compiles is downloaded to a browser on a counter tablet: domain rules, connection strings and
+compiles is downloaded to the browser at the counter: domain rules, connection strings and
 entity internals must not be shippable. The client sees `Shared` and nothing else — treat any
 other reference from `Client` as a defect, not a shortcut.
 
@@ -383,12 +383,12 @@ a record and registering a redemption are each a round trip. At ~250 ms to Europ
 a second of pure distance per lookup. The price difference between regions is a few dollars a
 month.
 
-**Counter conditions are part of the phase 1 gate.** The whole flow is exercised on a real cheap
-tablet, over a real branch's WiFi, before phase 1 is declared done. What is being verified with
-WebAssembly is different from what Blazor Server would have needed: first-load time on a cheap
-tablet over that WiFi (the .NET runtime downloads once, then caches), and that a request failing
-mid-flow shows a clear Spanish message and never loses a half-filled redemption form or submits
-it twice.
+**Counter conditions are part of the phase 1 gate.** The whole flow is exercised on the computer
+a branch actually uses, over that branch's real connection, before phase 1 is declared done — not
+only on a dev machine. What is being verified with WebAssembly is different from what Blazor
+Server would have needed: first-load time over that connection (the .NET runtime downloads once,
+then caches), and that a request failing mid-flow shows a clear Spanish message and never loses a
+half-filled redemption form or submits it twice.
 
 ### Schema updates across N deployments
 

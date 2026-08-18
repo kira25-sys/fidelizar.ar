@@ -45,7 +45,7 @@ public class JwtTokenServiceTests
         var usuario = UnUsuario();
 
         var (_, _) = servicio.CrearToken(usuario);
-        var sesion = Fidelizar.Api.Auth.SesionInfo.DeUsuario(usuario);
+        var sesion = Fidelizar.Api.Auth.SesionResponseMapper.DeUsuario(usuario);
         var principal = new System.Security.Claims.ClaimsPrincipal(new System.Security.Claims.ClaimsIdentity(
         [
             new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, sesion.Id.ToString()),

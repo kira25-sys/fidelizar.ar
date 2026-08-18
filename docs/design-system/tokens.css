@@ -1,5 +1,5 @@
 /*
- * Fidelizar — design tokens (F1-01)
+ * Fidelizar — design tokens (F1-01, revised in F1-01b)
  *
  * Rationale for every value lives in docs/DESIGN-SYSTEM.md. This file is the
  * only place a colour, size or radius is allowed to be a literal — components
@@ -7,8 +7,11 @@
  *
  * Load order: this file first, then component/page CSS. No external fonts,
  * no CSS framework (ARCHITECTURE §2 — no dependency beyond the stack agreed
- * there). System font stack only, so the first load on a counter tablet does
- * not wait on a font download (ARCHITECTURE §14).
+ * there). System font stack only, so the first load does not wait on a font
+ * download (ARCHITECTURE §14).
+ *
+ * Target: the computer the shop already has, mouse and keyboard first, and the
+ * same page usable on a phone (decided 2026-08-18 — FUNCTIONAL-SPEC §1).
  *
  * Theming: light is the default on :root. Automatic dark follows the OS via
  * prefers-color-scheme. A manual override is available through
@@ -28,7 +31,7 @@
 
   /* Borders */
   --color-border: #c9cdd2; /* decorative dividers only — 1.6:1, not for meaning */
-  --color-border-strong: #8a9099; /* input outlines, disabled boundaries — 3.2:1 */
+  --color-border-strong: #6e747b; /* clears 3:1 on all three surfaces — F1-01b */
 
   /* Text */
   --color-text: #16181b;
@@ -55,7 +58,9 @@
   --color-danger-active: #741810;
 
   /* Focus */
-  --color-focus-ring: #0b63ce; /* >=5:1 against both --color-bg and --color-surface */
+  --color-focus-ring: #0b63ce; /* >=4.6:1 on bg, surface and surface-sunken */
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
 
   /* Shadows — light: soft, low elevation. Never the only signal of a state. */
   --shadow-sm: 0 1px 2px rgba(20, 23, 26, 0.08);
@@ -100,15 +105,27 @@
   --radius-lg: 16px;  /* sheets, alert strip container */
   --radius-full: 999px; /* pills, badges, icon buttons */
 
-  /* ---------- Touch targets ----------
-   * 44px is the accessibility floor (WCAG 2.5.8 / platform HIGs). This
-   * product sets a higher default because the hand at the counter may be
-   * gloved, wet, or rushed, and a mis-tap credits or debits the wrong person.
+  /* ---------- Control sizes ----------
+   * Renamed from --touch-target-* in F1-01b: these are minimum sizes for any
+   * pointer, not a touch-only concession. 44px is the WCAG 2.5.8 floor; the
+   * defaults sit above it because a mis-click between two homonym rows credits
+   * money to the wrong person (I7).
    */
-  --touch-target-min: 44px;         /* absolute floor — small icon buttons only */
-  --touch-target-comfortable: 48px; /* default for inputs, list rows, secondary buttons */
-  --touch-target-primary: 56px;     /* primary CTA: buscar, registrar canje, confirmar */
-  --touch-target-gap-min: 8px;      /* minimum gap between adjacent tappable rows */
+  --control-size-min: 44px;         /* absolute floor — small icon buttons only */
+  --control-size-comfortable: 48px; /* default for inputs, list rows, secondary buttons */
+  --control-size-primary: 56px;     /* primary action: buscar, registrar canje, confirmar */
+  --control-gap-min: 8px;           /* minimum gap between adjacent activatable rows */
+
+  /* ---------- Layout ----------
+   * Breakpoints cannot be custom properties (media queries do not read var()),
+   * so they are literals below, documented here as the only three this system
+   * uses — narrow < 640px, medium 640-1023px, wide >= 1024px. Wide is the shop
+   * computer and the primary target; nothing is hidden at narrow (§10 of the
+   * design system doc).
+   */
+  --layout-max-width: 75rem;      /* 1200px — counter content stops widening here */
+  --layout-form-max-width: 34rem; /* 544px — a form column stays readable on a monitor */
+  --layout-gutter: var(--space-4);
 
   /* ---------- Motion ---------- */
   --duration-fast: 100ms;
@@ -129,7 +146,7 @@
     --color-surface-sunken: #262b30;
 
     --color-border: #3a4046; /* decorative — 1.5:1 */
-    --color-border-strong: #6b7178; /* meaningful boundaries — 3.25:1 */
+    --color-border-strong: #868d95; /* clears 3:1 on all three surfaces — F1-01b */
 
     --color-text: #f2f3f5;
     --color-text-muted: #b8bec4;
@@ -166,7 +183,7 @@
   --color-surface-sunken: #262b30;
 
   --color-border: #3a4046;
-  --color-border-strong: #6b7178;
+  --color-border-strong: #868d95;
 
   --color-text: #f2f3f5;
   --color-text-muted: #b8bec4;
@@ -220,22 +237,88 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Focus is never removed. :focus-visible keeps it off a plain tap while
-   guaranteeing it for keyboard and switch-device navigation. */
+/* Focus is never removed. :focus-visible keeps it off a plain click or tap
+   while guaranteeing it for keyboard and switch-device navigation. */
 :focus {
   outline: none;
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-focus-ring);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
   border-radius: var(--radius-sm);
+}
+
+/* First tab stop on every page: jump past the header into the search field.
+   Visible only while focused, so a mouse user never sees it. */
+.skip-link {
+  position: absolute;
+  left: var(--space-4);
+  top: calc(-1 * var(--control-size-primary) - var(--space-4));
+  z-index: var(--z-toast);
+  padding: var(--space-2) var(--space-4);
+  min-height: var(--control-size-comfortable);
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+  transition: top var(--duration-fast) var(--easing-standard);
+}
+
+.skip-link:focus-visible {
+  top: var(--space-4);
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Layout primitives ----------
+ * Not screens (F1-02, F1-05+ own those) — only the two containers that decide
+ * what a wide screen does with the extra room.
+ */
+
+/* Centred column that stops widening on a monitor. */
+.page {
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--layout-gutter);
+}
+
+/* A form never stretches to a monitor's full width. */
+.form-column {
+  max-width: var(--layout-form-max-width);
+}
+
+/* Stacked by default; side by side only once there is room for both. The
+   narrow order is the DOM order, so nothing is lost — only linearised. */
+.split {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --layout-gutter: var(--space-6);
+  }
+
+  .split {
+    grid-template-columns: minmax(0, 22rem) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  /* The list keeps its place while the member's record is read beside it. */
+  .split > .split__aside {
+    position: sticky;
+    top: var(--space-5);
   }
 }
 
@@ -250,7 +333,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: var(--touch-target-comfortable);
+  min-height: var(--control-size-comfortable);
   padding: var(--space-2) var(--space-4);
   border: 1px solid transparent;
   border-radius: var(--radius-md);
@@ -263,19 +346,11 @@ body {
 }
 
 .btn--primary {
-  min-height: var(--touch-target-primary);
+  min-height: var(--control-size-primary);
   background: var(--color-primary);
   color: var(--color-text-on-primary);
   font-weight: var(--font-weight-bold);
   font-size: var(--text-lg);
-}
-
-.btn--primary:hover {
-  background: var(--color-primary-hover);
-}
-
-.btn--primary:active {
-  background: var(--color-primary-active);
 }
 
 .btn--secondary {
@@ -284,20 +359,42 @@ body {
   color: var(--color-text);
 }
 
-.btn--secondary:hover {
-  background: var(--color-surface-sunken);
-}
-
 .btn--danger {
   background: var(--color-danger);
   color: var(--color-text-on-danger);
 }
 
-.btn--danger:hover {
-  background: var(--color-danger-hover);
+/* Hover is guarded: on a touch screen :hover sticks after a tap and leaves a
+   row looking selected when it is not. Only real pointers get it. */
+@media (hover: hover) and (pointer: fine) {
+  .btn--primary:hover:not(:disabled):not([aria-disabled="true"]) {
+    background: var(--color-primary-hover);
+  }
+
+  .btn--secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+    background: var(--color-surface-sunken);
+  }
+
+  .btn--danger:hover:not(:disabled):not([aria-disabled="true"]) {
+    background: var(--color-danger-hover);
+  }
+
+  .list-row:hover {
+    background: var(--color-surface-sunken);
+  }
 }
 
-.btn--danger:active {
+/* Active/pressed is not hover-guarded — a tap and a click both produce it,
+   and it is the confirmation that the press registered. */
+.btn--primary:active:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--color-primary-active);
+}
+
+.btn--secondary:active:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--color-border);
+}
+
+.btn--danger:active:not(:disabled):not([aria-disabled="true"]) {
   background: var(--color-danger-active);
 }
 
@@ -337,7 +434,7 @@ body {
 .input {
   display: block;
   width: 100%;
-  min-height: var(--touch-target-comfortable);
+  min-height: var(--control-size-comfortable);
   padding: var(--space-2) var(--space-3);
   background: var(--color-surface);
   border: 1px solid var(--color-border-strong);
@@ -382,24 +479,30 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: var(--touch-target-comfortable);
+  min-height: var(--control-size-comfortable);
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
+  border-left: 4px solid transparent;
   border-radius: var(--radius-md);
   cursor: pointer;
-}
-
-.list-row:hover {
-  background: var(--color-surface-sunken);
 }
 
 .list-row:active {
   background: var(--color-border);
 }
 
+/* The keyboard's active option. Focus stays in the search field
+   (aria-activedescendant), so this row must be readable as "the one Enter will
+   open" without owning focus — a bar plus a fill, never fill alone, so it is
+   still distinguishable from a hovered row. */
+.list-row[aria-selected="true"] {
+  background: var(--color-surface-sunken);
+  border-left-color: var(--color-primary);
+}
+
 .list-row + .list-row {
-  margin-top: var(--touch-target-gap-min);
+  margin-top: var(--control-gap-min);
 }
 
 .badge {

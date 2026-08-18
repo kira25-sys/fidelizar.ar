@@ -20,9 +20,11 @@ public sealed class CorteConfiguration : IEntityTypeConfiguration<Corte>
             .HasColumnType("date")
             .IsRequired();
 
-        // Scalar column, no navigation, no FK constraint: Usuario is F1-03 and does not exist
-        // yet in this wave. F1-03 introduces Usuario and adds the constraint in a later migration.
         builder.Property(c => c.DeclaradoPorUsuarioId).IsRequired();
+
+        // FK to Usuario, no navigation property either side. Restrict: whoever declared a
+        // cutoff is never removable while it is still on record.
+        builder.HasOne<Usuario>().WithMany().HasForeignKey(c => c.DeclaradoPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(c => c.DeclaradoEn)
             .HasColumnType("timestamptz")

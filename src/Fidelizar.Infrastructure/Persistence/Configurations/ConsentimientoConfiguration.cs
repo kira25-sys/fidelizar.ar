@@ -40,9 +40,12 @@ public sealed class ConsentimientoConfiguration : IEntityTypeConfiguration<Conse
             .HasColumnType("integer")
             .IsRequired();
 
-        // Scalar column, no navigation, no FK constraint: Usuario is F1-03 and does not exist
-        // yet in this wave. F1-03 introduces Usuario and adds the constraint in a later migration.
         builder.Property(c => c.RegistradoPorUsuarioId);
+
+        // FK to Usuario, no navigation property either side. Restrict: whoever recorded a
+        // consent is never removable while it is still on record. Null for self-service and for
+        // every row the phase-0 migration wrote.
+        builder.HasOne<Usuario>().WithMany().HasForeignKey(c => c.RegistradoPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(c => c.OcurridoEn)
             .HasColumnType("timestamptz")

@@ -163,20 +163,18 @@ public class FidelizarDbContextModelTests
     [InlineData(typeof(MovimientoCredito), "UsuarioId")]
     [InlineData(typeof(Corte), "DeclaradoPorUsuarioId")]
     [InlineData(typeof(ConfiguracionPrograma), "CreadoPorUsuarioId")]
-    public void Columnas_de_UsuarioId_son_escalares_sin_relacion_de_clave_foranea(Type tipoEntidad, string propiedad)
+    [InlineData(typeof(Consentimiento), "RegistradoPorUsuarioId")]
+    [InlineData(typeof(RegistroAuditoria), "UsuarioId")]
+    public void Columnas_de_UsuarioId_tienen_FK_a_Usuario(Type tipoEntidad, string propiedad)
     {
-        // Usuario ya existe (F1-03), pero estas columnas siguen sin FK a propósito: la migración
-        // F0-09 escribió UsuarioPlaceholderMigracion = 0 en estas mismas columnas para los 293
-        // socios ya migrados y verificados contra producción real (ROADMAP, gate F0-11). Una FK
-        // estricta ahora rompería esa base ya migrada apenas se le aplicara la migración, porque
-        // no existe ningún Usuario.Id = 0. Agregar la restricción requiere antes una migración de
-        // datos (o un Usuario "sistema" con ese Id) que el dueño tiene que autorizar — no algo
-        // para decidir en silencio en F1-03 (CLAUDE.md, "ask when in doubt").
+        // The Usuario sistema row (Id=0, Rol=Sistema) migration made the FK safe: it is what
+        // F0-09's UsuarioPlaceholderMigracion=0 already points at in Cortes and
+        // ConfiguracionesPrograma for the 293 migrated members.
         var model = BuildModel();
         var entidad = model.FindEntityType(tipoEntidad)!;
 
         Assert.NotNull(entidad.FindProperty(propiedad));
-        Assert.DoesNotContain(entidad.GetForeignKeys(), fk => fk.Properties.Any(p => p.Name == propiedad));
+        Assert.Contains(entidad.GetForeignKeys(), fk => fk.Properties.Any(p => p.Name == propiedad));
     }
 
     [Fact]
@@ -259,6 +257,22 @@ public class FidelizarDbContextModelTests
         var contenido = File.ReadAllText(migrationPath);
 
         Assert.Contains("PostgresExtension:citext", contenido, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void La_migracion_AddForeignKeysAUsuario_inserta_el_usuario_sistema_de_forma_idempotente()
+    {
+        // Raw SQL, so the runtime model (BuildModel()) carries none of it — the migration file
+        // itself is what Postgres applies, same reasoning as the citext check above.
+        var migrationPath = Path.Combine(
+            FindSolutionRoot(
+                "src", "Fidelizar.Infrastructure", "Persistence", "Migrations",
+                "20260818150610_AddForeignKeysAUsuario.cs"));
+
+        var contenido = File.ReadAllText(migrationPath);
+
+        Assert.Contains("ON CONFLICT (\"Id\") DO NOTHING", contenido, StringComparison.Ordinal);
+        Assert.Contains("(0, negocio_id,", contenido, StringComparison.Ordinal);
     }
 
     private static string FindSolutionRoot(params string[] relativePathFromRoot)

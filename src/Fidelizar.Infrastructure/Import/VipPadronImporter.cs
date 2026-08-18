@@ -126,9 +126,7 @@ public sealed class VipPadronImporter(
     /// </param>
     /// <param name="declaradoPorUsuarioId">
     /// Who is declaring this cutoff, stamped on the persisted <see cref="Corte"/>
-    /// (<c>Corte.DeclaradoPorUsuarioId</c>). <c>Usuario</c> is F1-03 and does not exist yet in
-    /// this wave, so this is a plain scalar the caller supplies — the one-off migration tool
-    /// (F0-09) or, once it exists, whichever authenticated user runs the import.
+    /// (<c>Corte.DeclaradoPorUsuarioId</c>) — the authenticated user running the import.
     /// </param>
     /// <param name="hoy">
     /// Today's date, used only to decide whether the <c>SaldoInicial</c> movement counts as

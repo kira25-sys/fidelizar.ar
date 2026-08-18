@@ -49,9 +49,11 @@ public sealed class MovimientoCreditoConfiguration : IEntityTypeConfiguration<Mo
 
         builder.Property(m => m.ReferenciaVenta);
 
-        // Scalar column, no navigation, no FK constraint: Usuario is F1-03 and does not exist
-        // yet in this wave. F1-03 introduces Usuario and adds the constraint in a later migration.
         builder.Property(m => m.UsuarioId);
+
+        // FK to Usuario, no navigation property either side. Restrict: a movement's actor is
+        // never removable while the ledger still points at it (I1).
+        builder.HasOne<Usuario>().WithMany().HasForeignKey(m => m.UsuarioId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(m => m.Motivo);
 

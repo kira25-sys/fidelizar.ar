@@ -50,8 +50,10 @@ public sealed class ConfiguracionProgramaConfiguration : IEntityTypeConfiguratio
 
         builder.Property(c => c.VigenteHasta).HasColumnType("date");
 
-        // Scalar column, no navigation, no FK constraint: Usuario is F1-03 and does not exist
-        // yet in this wave. F1-03 introduces Usuario and adds the constraint in a later migration.
         builder.Property(c => c.CreadoPorUsuarioId).IsRequired();
+
+        // FK to Usuario, no navigation property either side. Restrict: whoever created a
+        // configuration version is never removable while it is still on record.
+        builder.HasOne<Usuario>().WithMany().HasForeignKey(c => c.CreadoPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
     }
 }

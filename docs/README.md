@@ -10,7 +10,7 @@ Read in this order. Each one assumes the ones above it.
 | [DATA-MODEL.md](DATA-MODEL.md) | Tables, columns, types, indexes and why each exists | Schema decisions |
 | [CANONICAL-FORMAT.md](CANONICAL-FORMAT.md) | The one shape every sale takes before reaching the engine | The ingestion contract |
 | [FUNCTIONAL-SPEC.md](FUNCTIONAL-SPEC.md) | Screen by screen: who sees what, what happens when it fails | Product behaviour |
-| [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) | Colours, type scale, control sizes, states, hover, keyboard, breakpoints, light/dark, and why — with [`design-system/tokens.css`](design-system/tokens.css) as the CSS to load | What `F1-02` and every screen task build from |
+| [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) | Colours, type scale, control sizes, states, hover, keyboard, breakpoints, light/dark, and why — with [`../src/Fidelizar.Client/wwwroot/css/tokens.css`](../src/Fidelizar.Client/wwwroot/css/tokens.css) as the CSS to load | What `F1-02` and every screen task build from |
 | [FLOW-S2-S5.md](FLOW-S2-S5.md) | S2–S5 flow by flow: every state, every unhappy path, the exact Spanish copy — the homonym case and the stale-data warning in full | What `F1-05` through `F1-09` build from |
 | [ROADMAP.md](ROADMAP.md) | The work, phase by phase, task by task, with gates | Sequencing |
 

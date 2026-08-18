@@ -1,16 +1,65 @@
-﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@inherits LayoutComponentBase
+@inject ISessionService SessionService
+@implements IDisposable
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+@* No sidebar nav: FUNCTIONAL-SPEC §1 — search is the entry point, nothing to learn. *@
+
+<a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+<header class="app-header">
+    <span class="app-header__brand">Fidelizar</span>
+    @if (SessionService.IsAuthenticated)
+    {
+        <div class="app-header__session">
+            <span>@SessionService.Current?.NombreCompleto</span>
+            <button
+                type="button"
+                class="btn btn--secondary"
+                disabled="@_loggingOut"
+                aria-busy="@(_loggingOut ? "true" : "false")"
+                @onclick="HandleLogoutAsync">
+                Cerrar sesión
+            </button>
         </div>
+    }
+</header>
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+<main id="main-content" tabindex="-1" class="page">
+    @if (_logoutProblem is not null)
+    {
+        <ErrorNotice Problem="_logoutProblem" OnRetry="HandleLogoutAsync" />
+    }
+    @Body
+</main>
+
+@code {
+    private bool _loggingOut;
+    private ApiProblem? _logoutProblem;
+
+    protected override void OnInitialized()
+    {
+        SessionService.Changed += OnSessionChanged;
+    }
+
+    private async Task HandleLogoutAsync()
+    {
+        // disabled (not just aria-busy) is what stops a second Enter — DESIGN-SYSTEM §9.5.
+        if (_loggingOut)
+        {
+            return;
+        }
+
+        _loggingOut = true;
+        _logoutProblem = null;
+        StateHasChanged();
+
+        var result = await SessionService.LogoutAsync();
+
+        _loggingOut = false;
+        _logoutProblem = result.Success ? null : result.Problem;
+    }
+
+    private void OnSessionChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => SessionService.Changed -= OnSessionChanged;
+}

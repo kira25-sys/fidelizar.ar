@@ -22,4 +22,26 @@ public static class ClaimsPrincipalExtensions
             principal.FindFirstValue(ClaimTypes.NameIdentifier)
                 ?? throw new InvalidOperationException("El principal autenticado no trae NameIdentifier."),
             CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// The caller's own branch, or <c>null</c> for <c>Dueno</c>/<c>Soporte</c> — DATA-MODEL §2:
+    /// <c>SucursalId</c> is required on <c>Usuario</c> for <c>Cajero</c>/<c>Encargada</c>, null
+    /// for the roles that see every branch. <see cref="JwtTokenService"/> only sets the claim when
+    /// the user has a branch, so a missing claim here is that same "no branch" case, not an error.
+    /// </summary>
+    public static int? ObtenerSucursalId(this ClaimsPrincipal principal) =>
+        principal.FindFirstValue(JwtTokenService.SucursalIdClaim) is { } valor
+            ? int.Parse(valor, CultureInfo.InvariantCulture)
+            : null;
+
+    /// <summary>
+    /// The branch axis of F1-04 (roadmap): a user tied to one branch operates only on that
+    /// branch's own resources (e.g. S9 cierre diario) — never on another branch's. This is about
+    /// which resources a user may operate, not about which member they may serve: RN-07 and
+    /// FUNCTIONAL-SPEC are explicit that a member from another branch is served normally, since
+    /// the program's target is global, not per-branch. <c>Dueno</c>/<c>Soporte</c> carry no
+    /// branch claim (see <see cref="ObtenerSucursalId"/>) and this always returns true for them.
+    /// </summary>
+    public static bool PuedeOperarSucursal(this ClaimsPrincipal principal, int sucursalId) =>
+        principal.ObtenerSucursalId() is not { } propia || propia == sucursalId;
 }

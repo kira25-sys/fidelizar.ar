@@ -1,6 +1,7 @@
 using Fidelizar.Client;
 using Fidelizar.Client.Api;
 using Fidelizar.Client.Auth;
+using Fidelizar.Client.Services;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 
@@ -18,5 +19,6 @@ builder.Services.AddScoped(_ => new HttpClient
 builder.Services.AddScoped<CsrfTokenProvider>();
 builder.Services.AddScoped<IApiClient, ApiClient>();
 builder.Services.AddScoped<ISessionService, SessionService>();
+builder.Services.AddScoped<BusquedaSocioCache>();
 
 await builder.Build().RunAsync();

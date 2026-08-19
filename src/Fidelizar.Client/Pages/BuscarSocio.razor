@@ -1,0 +1,52 @@
+@page "/"
+@implements IDisposable
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
+
+@* S2 Buscar socio (FLOW-S2-S5.md §1, FUNCTIONAL-SPEC.md §4) — the counter's home screen and
+   entry point. F1-06 continues this from where F1-05 left it (Home.razor's own comment): the
+   search endpoint and MiembroResumen now exist, so the screen this page used to explain as
+   "not available yet" is built here.
+   S3 Ficha del socio joins this same page in the next commit, adding a second @@page route and
+   the .split layout §1.1 describes for Wide — kept out of this first step so S2 lands as its
+   own buildable, testable unit. *@
+
+<PageTitle>Buscar socio — Fidelizar</PageTitle>
+
+@if (SessionService.IsAuthenticated)
+{
+    @* No tabindex="-1" here, deliberately: FocusOnNavigate (App.razor) only moves focus to an
+       element it can actually focus, and a plain <h1> without a tabindex is not focusable, so
+       its attempt silently no-ops. S2 is the one screen in the product whose search field gets
+       focus instead of its heading (DESIGN-SYSTEM.md §9.2, FLOW-S2-S5.md §1.1) —
+       BusquedaSocioPanel's own AutoFocus handles that. Every other screen in this app keeps
+       tabindex="-1" on its <h1> for the ordinary case. *@
+    <h1>Buscar socio</h1>
+    <div class="form-column">
+        <BusquedaSocioPanel AutoFocus="true" />
+    </div>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        SessionService.Changed += OnSessionChanged;
+        RedirectIfAnonymous();
+    }
+
+    private void OnSessionChanged()
+    {
+        RedirectIfAnonymous();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void RedirectIfAnonymous()
+    {
+        if (!SessionService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/ingreso", replace: true);
+        }
+    }
+
+    public void Dispose() => SessionService.Changed -= OnSessionChanged;
+}

@@ -33,7 +33,7 @@ public static class PostgresGateSource
             .Select(m => new { m.Id, m.ClienteExternoId })
             .ToListAsync(cancellationToken);
 
-        var saldoService = new SaldoService(new MovimientoRepository(dbContext));
+        var saldoService = new SaldoService(new MovimientoRepository(dbContext), new MiembroRepository(dbContext));
 
         var resultado = new List<SocioPostgres>(miembros.Count);
         foreach (var miembro in miembros)

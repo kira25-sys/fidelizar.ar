@@ -9,10 +9,23 @@ namespace Fidelizar.Application.Services;
 /// <see cref="IMovimientoRepository.GetSaldoAsync"/>, never read from a stored column (I2).
 /// Knows nothing about HTTP or EF (ARCHITECTURE §3).
 /// </summary>
-public sealed class SaldoService(IMovimientoRepository movimientoRepository) : ISaldoService
+public sealed class SaldoService(
+    IMovimientoRepository movimientoRepository, IMiembroRepository miembroRepository) : ISaldoService
 {
-    public Task<decimal> ObtenerSaldoAsync(int negocioId, int miembroId, CancellationToken cancellationToken = default) =>
-        movimientoRepository.GetSaldoAsync(negocioId, miembroId, cancellationToken);
+    public async Task<decimal> ObtenerSaldoAsync(
+        int negocioId, int miembroId, CancellationToken cancellationToken = default)
+    {
+        // GetSaldoAsync's SUM(Monto) is 0 both for a real member with no movements and for an id
+        // that does not exist at all — a lookup is the only way to tell them apart, so it runs
+        // first, unconditionally, before the balance query (fixes the "$0 fantasma" gap this
+        // endpoint used to document instead of closing). Filtered by NegocioId like every lookup
+        // (I8): a member belonging to a different business is exactly as 404 as one that does not
+        // exist anywhere.
+        _ = await miembroRepository.GetByIdAsync(negocioId, miembroId, cancellationToken)
+            ?? throw new EntityNotFoundException($"Miembro {miembroId}");
+
+        return await movimientoRepository.GetSaldoAsync(negocioId, miembroId, cancellationToken);
+    }
 
     public async Task<MovimientoCredito> RegistrarCanjeAsync(
         RegistrarCanjeRequest request, CancellationToken cancellationToken = default)

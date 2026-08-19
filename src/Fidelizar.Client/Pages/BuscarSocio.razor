@@ -1,33 +1,52 @@
 @page "/"
+@page "/socios/{MiembroId:int}"
 @implements IDisposable
 @inject ISessionService SessionService
 @inject NavigationManager Navigation
 
-@* S2 Buscar socio (FLOW-S2-S5.md §1, FUNCTIONAL-SPEC.md §4) — the counter's home screen and
-   entry point. F1-06 continues this from where F1-05 left it (Home.razor's own comment): the
-   search endpoint and MiembroResumen now exist, so the screen this page used to explain as
-   "not available yet" is built here.
-   S3 Ficha del socio joins this same page in the next commit, adding a second @@page route and
-   the .split layout §1.1 describes for Wide — kept out of this first step so S2 lands as its
-   own buildable, testable unit. *@
+@* S2 Buscar socio + S3 Ficha del socio (FLOW-S2-S5.md §1-§2, FUNCTIONAL-SPEC.md §4-§5) — the
+   counter's home screen and the two ways it renders once a member is selected:
+   - Narrow/Medium: sequential screens. This route change is a real navigation; the aside is
+     present in markup but hidden by CSS below 1024px (see the .razor.css file) so only the
+     ficha shows — "S2 and S3 are separate screens" (§1.6).
+   - Wide: both render together as .split, the aside sticky beside the ficha (§1.1, §10.2 of
+     DESIGN-SYSTEM.md) — resolving a homonym costs one click, not a trip back.
+   Before a member is selected there is no .split at all: just the plain search column, exactly
+   as §1.1's own mockup shows it. *@
 
-<PageTitle>Buscar socio — Fidelizar</PageTitle>
+<PageTitle>@(MiembroId is null ? "Buscar socio — Fidelizar" : "Ficha del socio — Fidelizar")</PageTitle>
 
 @if (SessionService.IsAuthenticated)
 {
-    @* No tabindex="-1" here, deliberately: FocusOnNavigate (App.razor) only moves focus to an
-       element it can actually focus, and a plain <h1> without a tabindex is not focusable, so
-       its attempt silently no-ops. S2 is the one screen in the product whose search field gets
-       focus instead of its heading (DESIGN-SYSTEM.md §9.2, FLOW-S2-S5.md §1.1) —
-       BusquedaSocioPanel's own AutoFocus handles that. Every other screen in this app keeps
-       tabindex="-1" on its <h1> for the ordinary case. *@
-    <h1>Buscar socio</h1>
-    <div class="form-column">
-        <BusquedaSocioPanel AutoFocus="true" />
-    </div>
+    @if (MiembroId is null)
+    {
+        @* No tabindex="-1" here, deliberately: FocusOnNavigate (App.razor) only moves focus to
+           an element it can actually focus, and a plain <h1> without a tabindex is not
+           focusable, so its attempt silently no-ops. S2 is the one screen in the product whose
+           search field gets focus instead of its heading (DESIGN-SYSTEM.md §9.2, FLOW-S2-S5.md
+           §1.1) — BusquedaSocioPanel's own AutoFocus handles that. Every other screen in this
+           app keeps tabindex="-1" on its <h1> for the ordinary case. *@
+        <h1>Buscar socio</h1>
+        <div class="form-column">
+            <BusquedaSocioPanel AutoFocus="true" />
+        </div>
+    }
+    else
+    {
+        <div class="split split--con-socio">
+            <div class="split__aside">
+                <BusquedaSocioPanel AutoFocus="false" />
+            </div>
+            <div class="split__main">
+                <FichaSocioCard MiembroId="MiembroId.Value" />
+            </div>
+        </div>
+    }
 }
 
 @code {
+    [Parameter] public int? MiembroId { get; set; }
+
     protected override void OnInitialized()
     {
         SessionService.Changed += OnSessionChanged;

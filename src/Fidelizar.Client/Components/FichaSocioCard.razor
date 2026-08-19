@@ -1,0 +1,180 @@
+@* S3 Ficha del socio — the counter view (FLOW-S2-S5.md §2, FUNCTIONAL-SPEC.md §5). Fetches
+   GET /api/miembros/{id}/ficha-mostrador, the one call that carries everything this screen
+   needs: name, member number, balance, cutoff date and the alert strip. *@
+@using Fidelizar.Client.Api
+@using Fidelizar.Client.Formatting
+@using Fidelizar.Client.Services
+@using Fidelizar.Shared.Miembros
+@using System.Net
+@inject IApiClient ApiClient
+@inject NavigationManager Navigation
+@inject BusquedaSocioCache Cache
+@implements IDisposable
+
+@if (_loading)
+{
+    <div class="card" role="status" aria-live="polite">
+        <p>Cargando ficha del socio…</p>
+    </div>
+}
+else if (_corteNoDeclarado)
+{
+    <div class="card ficha-mensaje">
+        <p class="ficha-mensaje__titulo" tabindex="-1" @ref="_focusTarget">
+            Todavía no hay datos de ventas cargados para este negocio.
+        </p>
+        <p class="ficha-mensaje__cuerpo">
+            Pedile a la encargada o al dueño que complete la primera carga antes de registrar canjes.
+        </p>
+    </div>
+}
+else if (_noEncontrado)
+{
+    <div class="card ficha-mensaje">
+        <p class="ficha-mensaje__titulo" tabindex="-1" @ref="_focusTarget">No encontramos ese socio.</p>
+        <p class="ficha-mensaje__cuerpo">Puede que ya no esté disponible. Volvé a buscar.</p>
+        <button type="button" class="btn btn--secondary" @onclick="VolverABuscar">
+            Volver a la búsqueda
+        </button>
+    </div>
+}
+else if (_problem is not null)
+{
+    <ErrorNotice Problem="_problem" OnRetry="CargarAsync" />
+}
+else if (_ficha is not null)
+{
+    <div class="card ficha-socio">
+        <div class="ficha-socio__encabezado">
+            <h1 tabindex="-1" @ref="_focusTarget">@_ficha.Nombre</h1>
+            @if (!string.IsNullOrEmpty(_ficha.NumeroSocio))
+            {
+                <span class="ficha-socio__numero">N° @_ficha.NumeroSocio</span>
+            }
+        </div>
+
+        <div class="ficha-socio__saldo">
+            <p class="ficha-socio__etiqueta">SALDO DISPONIBLE</p>
+            <p class="ficha-socio__monto amount @(_ficha.Saldo < 0 ? "ficha-socio__monto--revision" : string.Empty)">
+                @MoneyFormatter.Format(_ficha.Saldo)
+            </p>
+            <CorteBadge CorteFecha="_ficha.CorteFecha" MostrarDetalle="true" />
+        </div>
+
+        @if (Cumpleanos is not null)
+        {
+            <p class="ficha-socio__alerta">🎂 @Cumpleanos.Texto</p>
+        }
+
+        @if (_ficha.Saldo < 0)
+        {
+            <p class="ficha-socio__revision">Saldo en revisión — consultá con la encargada.</p>
+        }
+
+        @* F1-07 wires this button to open S4's redemption dialog (FLOW-S2-S5.md §3) — a native
+           <dialog>, not a page navigation. Out of this task's scope: only the button that S3's
+           own layout requires is built here, with no click handler yet. *@
+        <button
+            type="button"
+            class="btn btn--primary ficha-socio__boton-canje"
+            disabled="@(_ficha.Saldo < 0)"
+            aria-disabled="@(_ficha.Saldo < 0 ? "true" : "false")">
+            Registrar canje
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public int MiembroId { get; set; }
+
+    private FichaMostradorResponse? _ficha;
+    private ApiProblem? _problem;
+    private bool _loading;
+    private bool _corteNoDeclarado;
+    private bool _noEncontrado;
+    private bool _pendingFocus;
+    private ElementReference _focusTarget;
+    private int? _cargadoParaId;
+    private CancellationTokenSource? _cts;
+
+    private AlertaMiembro? Cumpleanos => _ficha?.Alertas.FirstOrDefault(a => a.Tipo == "Cumpleanos");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_cargadoParaId == MiembroId)
+        {
+            return;
+        }
+
+        await CargarAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The ficha (or its 404/409 message) only exists in the DOM after the async fetch
+        // completes, so App.razor's FocusOnNavigate — which acts once, right after the route
+        // change — finds nothing to focus yet. This is what stands in for it once there is
+        // something to land on (DESIGN-SYSTEM.md §9.2: "Navigation to another screen → the new
+        // screen's <h1>").
+        if (_pendingFocus)
+        {
+            _pendingFocus = false;
+            await _focusTarget.FocusAsync();
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        _cts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+
+        _cargadoParaId = MiembroId;
+        _loading = true;
+        _problem = null;
+        _corteNoDeclarado = false;
+        _noEncontrado = false;
+        _ficha = null;
+        StateHasChanged();
+
+        var resultado = await ApiClient.GetAsync<FichaMostradorResponse>(
+            $"api/miembros/{MiembroId}/ficha-mostrador", cts.Token);
+
+        if (cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _loading = false;
+
+        if (resultado.Success)
+        {
+            _ficha = resultado.Value;
+        }
+        else if (resultado.Problem!.StatusCode == HttpStatusCode.NotFound)
+        {
+            _noEncontrado = true;
+        }
+        else if (resultado.Problem!.ErrorCode == "CORTE_NO_DECLARADO")
+        {
+            _corteNoDeclarado = true;
+        }
+        else
+        {
+            _problem = resultado.Problem;
+        }
+
+        _pendingFocus = _problem is null;
+        StateHasChanged();
+    }
+
+    private void VolverABuscar()
+    {
+        // "A different search was clearly needed" (FLOW-S2-S5.md §2.4) — the cached list no
+        // longer matches whatever led here, so it is discarded rather than restored.
+        Cache.Clear();
+        Navigation.NavigateTo("/");
+    }
+
+    public void Dispose() => _cts?.Cancel();
+}

@@ -1,13 +1,20 @@
-# REST contract — Phase 1 (F1-04b)
+# REST contract — Phase 1
 
 The seam ARCHITECTURE §3 talks about: once this is agreed, backend and frontend work stop
 waiting on each other. The full contract — every route, DTO and status code for S1 through S10
 — lives in [api/openapi-fase1.yaml](api/openapi-fase1.yaml). This document is the narrative
-version: what is real today, what is only a documented shape, and which Application service each
-pending endpoint is waiting on.
+version: what is real today, what is only a documented shape, and which Application service backs
+each endpoint.
 
 Hand-written, not generated: adding `Microsoft.AspNetCore.OpenApi` would be a new dependency, and
 CLAUDE.md says to ask before adding one. A static YAML file needs none.
+
+**Originally F1-04b implemented only S1, S3's balance piece and S4.**
+`feat/f1-backend-endpoints-pendientes` closed the rest of phase 1's endpoint table — S2, S3's full
+counter view, S6, S7, S8, S9 and S10 — plus the "$0 fantasma" defect `ObtenerSaldo` used to
+document instead of fix. **S5 Alta de socio stays pending on purpose**: it needs to compose
+`Miembro` and `Consentimiento` atomically (I10), and another branch was working on
+`Consentimiento` at the same time — see the note at the end of this document.
 
 ## Endpoint table
 
@@ -17,99 +24,138 @@ CLAUDE.md says to ask before adding one. A static YAML file needs none.
 | S1 Ingreso | `/api/auth/login` | POST | anyone | **Implemented** | `IAuthService` |
 | S1 Ingreso | `/api/auth/logout` | POST | any session | **Implemented** | — |
 | S1 Ingreso | `/api/auth/me` | GET | any session | **Implemented** | — |
-| S2 Buscar socio | `/api/miembros?q=` | GET | `CajeroOrAbove` | Pending | search on `IMiembroRepository` (does not exist) |
-| S3 Ficha del socio | `/api/miembros/{id}/saldo` | GET | `CajeroOrAbove` | **Implemented (partial)** | `ISaldoService` + `ICorteService` |
-| S3 Ficha del socio | `/api/miembros/{id}/ficha-mostrador` | GET | `CajeroOrAbove` | Pending | `Miembro` lookup by id + alert builder |
+| S2 Buscar socio | `/api/miembros?q=` | GET | `CajeroOrAbove` | **Implemented** | `IMiembroBusquedaService` |
+| S3 Ficha del socio | `/api/miembros/{id}/saldo` | GET | `CajeroOrAbove` | **Implemented** | `ISaldoService` + `ICorteService` |
+| S3 Ficha del socio | `/api/miembros/{id}/ficha-mostrador` | GET | `CajeroOrAbove` | **Implemented** | `IFichaMostradorService` |
 | S4 Registrar canje | `/api/miembros/{id}/canjes` | POST | `CajeroOrAbove` | **Implemented** | `ISaldoService.RegistrarCanjeAsync` |
-| S5 Alta de socio | `/api/miembros` | POST | `CajeroOrAbove` | Pending | member+consent creation use case |
-| S6 Ficha completa | `/api/miembros/{id}/completo` | GET | `EncargadaOrAbove` | Pending | full `Miembro` read + `RegistroAuditoria` write |
-| S7 Historial de movimientos | `/api/miembros/{id}/movimientos` | GET | `EncargadaOrAbove` | Pending | use-case wrapper over `IMovimientoRepository.GetPorMiembroAsync` |
-| S8 Anular movimiento | `/api/movimientos/{id}/anular` | POST | `EncargadaOrAbove` | Pending | `Ajuste`-writing use case, movement lookup by id |
-| S9 Cierre diario | `/api/sucursales/{id}/cierre-diario` | GET | `EncargadaOrAbove` | Pending | daily redemption aggregation use case |
-| S10 Usuarios | `/api/usuarios` | GET / POST | `DuenoOnly` | Pending | `IUsuarioService` (repository has no list) |
-| S10 Sucursales | `/api/sucursales` | GET / POST | `DuenoOnly` | Pending | `ISucursalRepository` / service (neither exists) |
+| S5 Alta de socio | `/api/miembros` | POST | `CajeroOrAbove` | Pending | member+consent creation use case — blocked on `feat/f1-08-consentimiento` |
+| S6 Ficha completa | `/api/miembros/{id}/completo` | GET | `EncargadaOrAbove` | **Implemented** | `IFichaCompletaService` |
+| S7 Historial de movimientos | `/api/miembros/{id}/movimientos` | GET | `EncargadaOrAbove` | **Implemented** | `IHistorialMovimientosService` |
+| S8 Anular movimiento | `/api/movimientos/{id}/anular` | POST | `EncargadaOrAbove` | **Implemented** | `IAnulacionMovimientoService` |
+| S9 Cierre diario | `/api/sucursales/{id}/cierre-diario` | GET | `EncargadaOrAbove` | **Implemented** | `ICierreDiarioService` |
+| S10 Usuarios | `/api/usuarios` | GET / POST | `DuenoOnly` | **Implemented** | `IUsuarioService` |
+| S10 Sucursales | `/api/sucursales` | GET / POST | `DuenoOnly` | **Implemented** | `ISucursalService` |
 
 Every state-changing route (`POST`) requires the `X-CSRF-TOKEN` header from
 `GET /api/auth/csrf-token` (`AntiforgeryTokenRequiredAttribute`, ARCHITECTURE §8). Every route
-requires a valid session; the specific policy column above is what F1-04/F1-15 will verify with
-negative tests per role.
+requires a valid session; the specific policy column above is what F1-15 will verify with negative
+tests per role, run against the live HTTP pipeline. What this branch verifies (controller-level
+unit tests, no HTTP, no database — ARCHITECTURE §11) is that every action declares its policy
+explicitly and calls through to the real service with `NegocioId` and the acting user's id taken
+from the token, never from the URL or the body.
 
-## What is implemented, and why exactly this much
-
-Only `ISaldoService`, `ICorteService` and `IAuthService` exist in `Fidelizar.Application` today.
-Everything wired up here calls one of those three, unchanged — no new Application code, no new
-repository method, because writing one would go beyond what this task asked for.
+## What each endpoint is backed by
 
 - **`MiembrosController.ObtenerSaldo`** (`GET /api/miembros/{id}/saldo`) calls
   `ISaldoService.ObtenerSaldoAsync` and `ICorteService.ObtenerCorteVigenteAsync`, combining them
   because ARCHITECTURE §13 R3 forbids showing a balance without its cutoff date next to it.
-  **Known gap**: there is no `IMiembroRepository.GetByIdAsync`, so this endpoint cannot tell an
-  unknown `miembroId` apart from a real member with a $0 balance — `SUM(Monto)` over zero rows
-  is also `0`. It is still worth having: it is real, calls real services, and is exactly the
-  balance sub-widget S3 needs once a Miembro lookup exists to wrap it.
-- **`MiembrosController.RegistrarCanje`** (`POST /api/miembros/{id}/canjes`) calls
-  `ISaldoService.RegistrarCanjeAsync` directly. `NegocioId` and the acting user's id come from
-  the JWT claims (`ClaimsPrincipalExtensions`), never from the request body — a Cajero cannot
-  redeem against another business by editing the URL.
-- **Auth (S1)** was already done in F1-03's `AuthController`. This task's only change there is
-  moving `LoginRequest` and the session DTO into `Fidelizar.Shared` (as `Auth.LoginRequest` /
-  `Auth.SesionResponse`), because a `Client` built against this contract (F1-04c) can only see
-  `Shared` — the old versions lived in `Fidelizar.Api.Auth`, unreachable from `Client`. The
-  mapping from `Usuario`/`ClaimsPrincipal` to `SesionResponse` stays in Api
-  (`SesionResponseMapper`), since `Shared` cannot reference `Domain` or claims-handling code tied
-  to `JwtTokenService`.
+  **The "$0 fantasma" defect is fixed**: `ISaldoService.ObtenerSaldoAsync` now calls
+  `IMiembroRepository.GetByIdAsync` before computing `SUM(Monto)`, so an unknown `miembroId` — or
+  one belonging to another `NegocioId` — 404s instead of returning a misleading `0`. A real member
+  with a genuinely zero balance still returns `200` with `0`.
+- **`MiembrosController.BuscarMiembros`** (`GET /api/miembros?q=`, S2) calls
+  `IMiembroBusquedaService.BuscarAsync`, which queries `NombreNormalizado` — every word of the
+  (normalised) query must appear as a substring, so "gomez ana" only matches a name containing
+  both words, not either alone — and rejects anything under 3 normalised characters with
+  `400 BUSQUEDA_MUY_CORTA` rather than falling back to a listing (FUNCTIONAL-SPEC §4: "buscar,
+  nunca listar"). Results are capped at 25 rows in `MiembroRepository.BuscarAsync`, and each
+  carries the same `corteFecha` `ObtenerSaldo` does — a search result row is still a rendered
+  balance, and R3 exempts none of them.
+- **`MiembrosController.FichaMostrador`** (`GET /api/miembros/{id}/ficha-mostrador`, S3) calls
+  `IFichaMostradorService.ObtenerAsync`, which 404s an unknown/another-business `miembroId`
+  (`IMiembroRepository.GetByIdAsync`) and builds the alert strip. Phase 1 can only ever produce
+  the `Cumpleanos` alert — `Fidelizar.Domain.Reglas.AvisoCumpleanos` implements RN-11 (notice from
+  2 days before, day/month only, year ignored) as a pure Domain rule so it is testable with no
+  database. `AlergiaODieta` needs `PerfilMiembro` (phase 3, F3-01) and `ComprasHabituales` needs
+  phase-4 aggregation — the enum values exist in `Fidelizar.Application.Services.TipoAlertaMiembro`
+  for forward compatibility, but nothing produces either kind yet.
+- **`MiembrosController.FichaCompleta`** (`GET /api/miembros/{id}/completo`, S6,
+  `EncargadaOrAbove`) calls `IFichaCompletaService.ObtenerAsync`, the only place `Telefono`/`Dni`
+  ever leave the server. Every single read writes a `RegistroAuditoria` row
+  (`Accion = "VerFichaCompleta"`, DATA-MODEL §2) before returning — not only the first read of a
+  session, every one.
+- **`MiembrosController.HistorialMovimientos`** (`GET /api/miembros/{id}/movimientos`, S7,
+  `EncargadaOrAbove`) calls `IHistorialMovimientosService.ObtenerAsync`, a thin wrapper over the
+  `IMovimientoRepository.GetPorMiembroAsync` call that already existed — the only thing actually
+  missing was the Application-level use case a controller is allowed to talk to (ARCHITECTURE §3).
+  It also resolves each movement's `UsuarioNombre` with one bulk fetch of the business's staff
+  list, not one lookup per row.
+- **`MovimientosController.Anular`** (`POST /api/movimientos/{id}/anular`, S8,
+  `EncargadaOrAbove`) calls `IAnulacionMovimientoService.AnularAsync`: looks the original movement
+  up by id (`IMovimientoRepository.GetByIdAsync`, new — 404s for an unknown id or one belonging to
+  another `NegocioId`, exactly like every other lookup, I8) and appends a new `Ajuste` of
+  `-Monto`, dated the day the void happens, with the mandatory reason and the acting user from the
+  JWT. `MovimientoCredito.Crear` is the only thing that ever validates `Motivo` — this service does
+  not duplicate that check, it just triggers it (I1, I3).
+- **`SucursalesController.CierreDiario`** (`GET /api/sucursales/{id}/cierre-diario`, S9,
+  `EncargadaOrAbove`) calls `ICierreDiarioService.ObtenerAsync`. A `Canje` carries no `SucursalId`
+  of its own (DATA-MODEL §4 — branch is organisational, RN-07), so "this branch's redemptions"
+  means the ones registered by a cashier stationed at it (`Usuario.SucursalId`), not the member's
+  own branch — a member from another branch is still served normally (RN-07/FUNCTIONAL-SPEC), so
+  filtering by the member's branch would silently drop exactly the cross-branch redemptions this
+  report exists to show. The controller enforces the branch axis before calling the service: an
+  `Encargada` tied to one branch gets `403` for any `sucursalId` that is not her own
+  (`ClaimsPrincipalExtensions.PuedeOperarSucursal`); `Dueño` has no branch claim and can ask for
+  any.
+- **`UsuariosController`** (`/api/usuarios`, S10, `DuenoOnly`) calls `IUsuarioService`.
+  `ListarAsync` is a straight passthrough; `CrearAsync` hashes the password
+  (`IPasswordHasher.Hash`, never stored in plain text even in memory beyond the call), rejects a
+  duplicate email within the business (`409 USUARIO_EMAIL_DUPLICADO`) and validates
+  `SucursalId` exists when supplied (`400 SUCURSAL_INEXISTENTE`) before delegating to
+  `Usuario.Crear`, which is what actually enforces the role/branch combination (DATA-MODEL §2).
+  `Rol` travels as text on the wire (`Shared` cannot reference `Domain`, ARCHITECTURE §3) and is
+  parsed in `Api` — `Sistema` is rejected explicitly even though it parses cleanly as a CLR enum
+  member, because no account may ever be created under it.
+- **`SucursalesController`** (`/api/sucursales`, S10, `DuenoOnly`) calls `ISucursalService`, which
+  is new alongside `ISucursalRepository` — nothing built a branch before this task.
+- **`MiembrosController.RegistrarCanje`** (`POST /api/miembros/{id}/canjes`) — unchanged from
+  F1-04b, not touched by this task (README decision #6, idempotency, is still open).
+- **Auth (S1)** — unchanged from F1-03/F1-04b.
 
-## What is pending, endpoint by endpoint
+## S5 Alta de socio — still pending, deliberately
 
-For each of these, the shape is fully specified in the OpenAPI document (`x-status: pending`,
-with an `x-pending-service` note) so frontend work can be designed against it — but no
-controller exists, because implementing one would mean either inventing the Application service
-or writing a fake response. Both are explicitly against this task's instructions.
-
-| Endpoint | Missing piece |
-| --- | --- |
-| S2 search | No search method on `IMiembroRepository` (only `GetByClienteExternoIdAsync` and `AddAsync` exist), and no Application service to enforce "search, never browse" (no query → no results, never a listing). |
-| S3 full ficha | No `Miembro` lookup by id at all. Alerts beyond the balance need `Consentimiento` (exists) + `PerfilMiembro` (phase 3, F3-01) for diet/allergy, and RN-11's birthday math over a `Miembro` this layer cannot fetch yet. |
-| S5 alta de socio | Needs a use case that creates `Miembro` and writes the mandatory `DatosPersonales` `Consentimiento` atomically (I10) — `IMiembroRepository.AddAsync` alone does not compose that. |
-| S6 ficha completa | Same lookup gap as S3, plus `Telefono`/`Dni` exposure gated to `Encargada`/`Dueño`, plus a `RegistroAuditoria` write (`VerFichaCompleta`) that nothing calls today. |
-| S7 historial | The repository call already exists (`IMovimientoRepository.GetPorMiembroAsync`) — what is missing is the Application-level use case. A controller must talk to `Application`, never to a repository directly (ARCHITECTURE §3), so this is one line of real work away, not a redesign, but it is not one of the three services this task was scoped to use. |
-| S8 anular movimiento | Needs a lookup-by-id on the ledger (none exists — `IMovimientoRepository` only offers per-member/per-period queries) and a use case that writes the correcting `Ajuste` (I1, I3). |
-| S9 cierre diario | Needs an aggregation use case over a branch's `Canje` movements for one day; nothing computes that today. |
-| S10 usuarios/sucursales | `IUsuarioRepository` has no list method (only email lookup, create, deactivate — enough for `AuthService`, not for a CRUD screen); there is no `ISucursalRepository` or `ISucursalService` at all. |
-
-None of these were implemented as stubs returning empty lists or fabricated data — an endpoint
-that lies about having a backing service is worse than a 404 (task instructions, F1-04b).
+`AltaMiembroRequest`'s shape in the OpenAPI document is unchanged. It needs a use case that
+creates `Miembro` and writes the mandatory `DatosPersonales` `Consentimiento` in the same
+transaction (I10) — `IMiembroRepository.AddAsync` alone does not compose that, and
+`feat/f1-08-consentimiento` was working on the `Consentimiento` entity and service at the same
+time this branch ran. No file under that entity's ownership was touched here.
 
 ## DTOs added to `Fidelizar.Shared`
 
-Only for the four implemented endpoints — adding compiled types for the pending ones risked
-drifting from whatever their real Application service ends up shaping, and the OpenAPI document
-already gives the frontend a firm shape to code against without a C# type backing it yet.
-
 | Namespace | Type | Screen |
 | --- | --- | --- |
-| `Fidelizar.Shared.Auth` | `LoginRequest` | S1 |
-| `Fidelizar.Shared.Auth` | `SesionResponse` | S1 |
-| `Fidelizar.Shared.Miembros` | `SaldoMiembroResponse` | S3 (partial) |
-| `Fidelizar.Shared.Movimientos` | `RegistrarCanjeRequest` | S4 |
-| `Fidelizar.Shared.Movimientos` | `CanjeResponse` | S4 |
+| `Fidelizar.Shared.Miembros` | `MiembroResumen` | S2 |
+| `Fidelizar.Shared.Miembros` | `FichaMostradorResponse` / `AlertaMiembro` | S3 |
+| `Fidelizar.Shared.Miembros` | `FichaCompletaResponse` | S6 |
+| `Fidelizar.Shared.Movimientos` | `MovimientoResponse` | S7, S8 |
+| `Fidelizar.Shared.Movimientos` | `AnularMovimientoRequest` | S8 |
+| `Fidelizar.Shared.Sucursales` | `CierreDiarioResponse` / `CierreDiarioMovimiento` | S9 |
+| `Fidelizar.Shared.Sucursales` | `SucursalResponse` / `CrearSucursalRequest` | S10 |
+| `Fidelizar.Shared.Usuarios` | `UsuarioResponse` / `CrearUsuarioRequest` | S10 |
 
-All five carry only data and `System.ComponentModel.DataAnnotations` attributes — no entities, no
-EF, no business rules (ARCHITECTURE §3). The attributes exist to give the cashier a fast Spanish
-message; the real enforcement is server-side in `Domain`/`Application` regardless.
+All of them carry only data and, where relevant, `System.ComponentModel.DataAnnotations`
+attributes — no entities, no EF, no business rules (ARCHITECTURE §3). The attributes exist to give
+staff a fast Spanish message; the real enforcement is server-side in `Domain`/`Application`
+regardless. Every Application-level command/result type that pairs with one of these (e.g.
+`Fidelizar.Application.Services.AnularMovimientoRequest`, distinct from the `Shared` one of the
+same name) lives in `Fidelizar.Application`, never in `Shared`, because `Fidelizar.Application`
+cannot reference `Fidelizar.Shared` (ARCHITECTURE §3) — the same pattern `RegistrarCanjeRequest`
+already established in F1-04b. Where a name collides, the controller aliases one of the two
+(`using AnularRequest = Fidelizar.Shared.Movimientos.AnularMovimientoRequest;` in
+`MovimientosController`), following `CanjeRequest`'s precedent in `MiembrosController`.
 
-## A documentation discrepancy found while writing this, since resolved
+## A documentation discrepancy found while writing F1-04b, since resolved
 
 FUNCTIONAL-SPEC §6 (S4) used to say `Motivo` was "optional when the date is today, mandatory when
 the date is in the past", while `MovimientoCredito.Crear` and DATA-MODEL §4 both require it for
 **every** `Canje`. The owner resolved it on 2026-08-18 in favour of the code: `Motivo` is
-mandatory always, and FUNCTIONAL-SPEC §6 was corrected in this same branch. `RegistrarCanjeRequest`
+mandatory always, and FUNCTIONAL-SPEC §6 was corrected in that branch. `RegistrarCanjeRequest`
 in `Shared` keeps `[Required]`, which now matches all three.
 
 ## The error shape
 
-Unchanged, as instructed: `Fidelizar.Shared.Errors.ErrorResponse` (`ErrorCode`, `Message`,
-`Details[]`), produced only by `ExceptionHandlingMiddleware`. Every `AppException` subtype maps
-to a fixed HTTP status (`ValidationException` → 400, `EntityNotFoundException` → 404,
-`ConflictException` → 409, `AuthenticationException` → 401, `AuthorizationException` → 403); an
-unhandled exception maps to 500 with the generic `UNHANDLED_ERROR` code, never a stack trace.
+Unchanged: `Fidelizar.Shared.Errors.ErrorResponse` (`ErrorCode`, `Message`, `Details[]`), produced
+only by `ExceptionHandlingMiddleware`. Every `AppException` subtype maps to a fixed HTTP status
+(`ValidationException` → 400, `EntityNotFoundException` → 404, `ConflictException` → 409,
+`AuthenticationException` → 401, `AuthorizationException` → 403); an unhandled exception maps to
+500 with the generic `UNHANDLED_ERROR` code, never a stack trace.

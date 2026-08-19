@@ -34,6 +34,16 @@ public sealed class MovimientoRepository(FidelizarDbContext dbContext) : IMovimi
         dbContext.MovimientosCredito
             .AnyAsync(m => m.NegocioId == negocioId && m.MiembroId == miembroId, cancellationToken);
 
+    public Task<MovimientoCredito?> GetByIdAsync(int negocioId, long id, CancellationToken cancellationToken = default) =>
+        dbContext.MovimientosCredito.SingleOrDefaultAsync(m => m.NegocioId == negocioId && m.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<MovimientoCredito>> GetPorFechaEfectivaYTipoAsync(
+        int negocioId, DateOnly fechaEfectiva, TipoMovimientoCredito tipo, CancellationToken cancellationToken = default) =>
+        await dbContext.MovimientosCredito
+            .Where(m => m.NegocioId == negocioId && m.FechaEfectiva == fechaEfectiva && m.Tipo == tipo)
+            .OrderBy(m => m.RegistradoEn)
+            .ToListAsync(cancellationToken);
+
     public async Task<MovimientoCredito> AppendAsync(
         MovimientoCredito movimiento, CancellationToken cancellationToken = default)
     {

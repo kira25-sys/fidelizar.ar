@@ -41,7 +41,9 @@ public class InvarianteI2SaldoTests
         for (var trial = 0; trial < Trials; trial++)
         {
             var repositorio = new FakeMovimientoRepository();
-            var servicio = new SaldoService(repositorio);
+            var miembroRepositorio = new FakeMiembroRepository();
+            miembroRepositorio.SembrarNuevo(NegocioId, MiembroId);
+            var servicio = new SaldoService(repositorio, miembroRepositorio);
 
             for (var op = 0; op < OperationsPerTrial; op++)
             {

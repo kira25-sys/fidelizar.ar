@@ -13,6 +13,12 @@ public sealed class UsuarioRepository(FidelizarDbContext dbContext) : IUsuarioRe
         dbContext.Usuarios.SingleOrDefaultAsync(
             u => u.NegocioId == negocioId && u.Email == email, cancellationToken);
 
+    public async Task<IReadOnlyList<Usuario>> ListarAsync(int negocioId, CancellationToken cancellationToken = default) =>
+        await dbContext.Usuarios
+            .Where(u => u.NegocioId == negocioId)
+            .OrderBy(u => u.NombreCompleto)
+            .ToListAsync(cancellationToken);
+
     public async Task<Usuario> CrearAsync(Usuario usuario, CancellationToken cancellationToken = default)
     {
         dbContext.Usuarios.Add(usuario);

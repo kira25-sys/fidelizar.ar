@@ -26,6 +26,22 @@ public interface IMovimientoRepository
     Task<bool> TieneMovimientosAsync(int negocioId, int miembroId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// A single movement by id, or null. S8 Anular movimiento needs this lookup before it can
+    /// write the correcting <c>Ajuste</c> — it does not exist to support editing or deleting
+    /// anything (I1): read-only, exactly like every other method on this interface.
+    /// </summary>
+    Task<MovimientoCredito?> GetByIdAsync(int negocioId, long id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every movement of one <paramref name="tipo"/> on one calendar day, across the whole
+    /// business. S9 Cierre diario uses this to gather a day's <c>Canje</c> rows before narrowing
+    /// them to one branch — branch is not a ledger column (DATA-MODEL §4), so that narrowing
+    /// happens one layer up, in Application, against the acting cashier's <c>Usuario.SucursalId</c>.
+    /// </summary>
+    Task<IReadOnlyList<MovimientoCredito>> GetPorFechaEfectivaYTipoAsync(
+        int negocioId, DateOnly fechaEfectiva, TipoMovimientoCredito tipo, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Appends one movement. Stamps <see cref="MovimientoCredito.SaldoResultante"/> from the
     /// current balance inside the same transaction as the insert (DATA-MODEL §4), so a concurrent
     /// append can never race past it.

@@ -24,6 +24,12 @@ public sealed record RegistrarCanjeRequest(
 public interface ISaldoService
 {
     /// <summary>The member's balance: <c>SUM(Monto)</c> of their movements (I2).</summary>
+    /// <exception cref="Fidelizar.Domain.Exceptions.EntityNotFoundException">
+    /// No member with <paramref name="miembroId"/> exists for this business — including one that
+    /// belongs to a different <c>NegocioId</c> (I8). <c>SUM(Monto)</c> over zero rows is also 0,
+    /// so this lookup is the only thing that can tell an unknown id apart from a member whose
+    /// balance is genuinely zero.
+    /// </exception>
     Task<decimal> ObtenerSaldoAsync(int negocioId, int miembroId, CancellationToken cancellationToken = default);
 
     /// <summary>

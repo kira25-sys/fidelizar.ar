@@ -27,6 +27,16 @@ public sealed class FakeMiembroRepository : IMiembroRepository
         Task.FromResult(_miembros.FirstOrDefault(
             m => m.NegocioId == negocioId && m.ClienteExternoId == clienteExternoId));
 
+    public Task<Miembro?> GetByIdAsync(int negocioId, int id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_miembros.FirstOrDefault(m => m.NegocioId == negocioId && m.Id == id));
+
+    public Task<IReadOnlyList<Miembro>> BuscarAsync(
+        int negocioId, IReadOnlyList<string> palabrasNormalizadas, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Miembro>>(_miembros
+            .Where(m => m.NegocioId == negocioId
+                && palabrasNormalizadas.All(p => m.NombreNormalizado.Contains(p, StringComparison.Ordinal)))
+            .ToList());
+
     public Task<Miembro> AddAsync(Miembro miembro, CancellationToken cancellationToken = default)
     {
         IdProperty.SetValue(miembro, _nextId++);

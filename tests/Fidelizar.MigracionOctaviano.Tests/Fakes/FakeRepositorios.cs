@@ -64,6 +64,18 @@ public sealed class FakeMiembroRepository : IMiembroRepository
         Task.FromResult(_miembros.FirstOrDefault(
             m => m.NegocioId == negocioId && m.ClienteExternoId == clienteExternoId));
 
+    public Task<Miembro?> GetByIdAsync(int negocioId, int id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_miembros.FirstOrDefault(m => m.NegocioId == negocioId && m.Id == id));
+
+    // Not exercised by the migrator itself — a minimal, correct implementation only, so this
+    // fake keeps satisfying IMiembroRepository as it grows (F1-backend-endpoints-pendientes).
+    public Task<IReadOnlyList<Miembro>> BuscarAsync(
+        int negocioId, IReadOnlyList<string> palabrasNormalizadas, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Miembro>>(_miembros
+            .Where(m => m.NegocioId == negocioId
+                && palabrasNormalizadas.All(p => m.NombreNormalizado.Contains(p, StringComparison.Ordinal)))
+            .ToList());
+
     public Task<Miembro> AddAsync(Miembro miembro, CancellationToken cancellationToken = default)
     {
         IdProperty.SetValue(miembro, _nextId++);
@@ -98,6 +110,17 @@ public sealed class FakeMovimientoRepository : IMovimientoRepository
 
     public Task<bool> TieneMovimientosAsync(int negocioId, int miembroId, CancellationToken cancellationToken = default) =>
         Task.FromResult(_movimientos.Any(m => m.NegocioId == negocioId && m.MiembroId == miembroId));
+
+    // Not exercised by the migrator itself — minimal, correct implementations only, so this fake
+    // keeps satisfying IMovimientoRepository as it grows (F1-backend-endpoints-pendientes).
+    public Task<MovimientoCredito?> GetByIdAsync(int negocioId, long id, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_movimientos.FirstOrDefault(m => m.NegocioId == negocioId && m.Id == id));
+
+    public Task<IReadOnlyList<MovimientoCredito>> GetPorFechaEfectivaYTipoAsync(
+        int negocioId, DateOnly fechaEfectiva, TipoMovimientoCredito tipo, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<MovimientoCredito>>(_movimientos
+            .Where(m => m.NegocioId == negocioId && m.FechaEfectiva == fechaEfectiva && m.Tipo == tipo)
+            .ToList());
 
     public Task<MovimientoCredito> AppendAsync(MovimientoCredito movimiento, CancellationToken cancellationToken = default)
     {

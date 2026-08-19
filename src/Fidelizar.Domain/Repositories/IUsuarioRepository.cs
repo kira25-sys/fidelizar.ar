@@ -16,6 +16,10 @@ public interface IUsuarioRepository
     /// </summary>
     Task<Usuario?> ObtenerPorEmailAsync(int negocioId, string email, CancellationToken cancellationToken = default);
 
+    /// <summary>S10 Usuarios — the owner's staff list (Dueño only), not the "no listing" a cashier
+    /// runs into at the counter (FUNCTIONAL-SPEC §4 is about members, not staff accounts).</summary>
+    Task<IReadOnlyList<Usuario>> ListarAsync(int negocioId, CancellationToken cancellationToken = default);
+
     Task<Usuario> CrearAsync(Usuario usuario, CancellationToken cancellationToken = default);
 
     /// <summary>

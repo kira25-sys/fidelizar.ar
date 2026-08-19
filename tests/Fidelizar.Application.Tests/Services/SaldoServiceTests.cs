@@ -11,10 +11,19 @@ public class SaldoServiceTests
     private const int MiembroId = 42;
     private static readonly DateOnly Hoy = new(2026, 8, 12);
 
-    private static SaldoService CrearServicio(out FakeMovimientoRepository repositorio)
+    private static SaldoService CrearServicio(out FakeMovimientoRepository repositorio) =>
+        CrearServicio(out repositorio, out _);
+
+    private static SaldoService CrearServicio(
+        out FakeMovimientoRepository movimientoRepositorio, out FakeMiembroRepository miembroRepositorio)
     {
-        repositorio = new FakeMovimientoRepository();
-        return new SaldoService(repositorio);
+        movimientoRepositorio = new FakeMovimientoRepository();
+        miembroRepositorio = new FakeMiembroRepository();
+        // Most tests here exercise the balance math, not the existence check — a member is
+        // seeded by default so ObtenerSaldoAsync's new lookup does not 404 them all. The tests
+        // that exist specifically to prove the lookup opt out of it explicitly below.
+        miembroRepositorio.SembrarNuevo(NegocioId, MiembroId);
+        return new SaldoService(movimientoRepositorio, miembroRepositorio);
     }
 
     /// <summary>I2: the balance is always <c>SUM(Monto)</c>, after an arbitrary sequence of
@@ -116,5 +125,48 @@ public class SaldoServiceTests
 
         var ex = await Assert.ThrowsAsync<ValidationException>(() => servicio.RegistrarCanjeAsync(request));
         Assert.Equal("MONTO_INVALIDO", ex.ErrorCode);
+    }
+
+    /// <summary>
+    /// The "$0 fantasma" fix: <c>SUM(Monto)</c> over zero rows is also 0, so without a lookup an
+    /// unknown id and a real member with a genuinely empty ledger were indistinguishable. This is
+    /// the negative half of that fix — an id nobody registered 404s instead of returning 0.
+    /// </summary>
+    [Fact]
+    public async Task Saldo_de_un_miembro_inexistente_lanza_EntityNotFoundException()
+    {
+        var movimientoRepositorio = new FakeMovimientoRepository();
+        var miembroRepositorio = new FakeMiembroRepository();
+        var servicio = new SaldoService(movimientoRepositorio, miembroRepositorio);
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(
+            () => servicio.ObtenerSaldoAsync(NegocioId, MiembroId));
+    }
+
+    /// <summary>I8: a member that exists, but for a different business, must read exactly like a
+    /// member that does not exist at all — never a 200, never a hint that the id is real
+    /// somewhere else.</summary>
+    [Fact]
+    public async Task Saldo_de_un_miembro_de_otro_negocio_lanza_EntityNotFoundException()
+    {
+        var movimientoRepositorio = new FakeMovimientoRepository();
+        var miembroRepositorio = new FakeMiembroRepository();
+        miembroRepositorio.SembrarNuevo(negocioId: 2, MiembroId);
+        var servicio = new SaldoService(movimientoRepositorio, miembroRepositorio);
+
+        await Assert.ThrowsAsync<EntityNotFoundException>(
+            () => servicio.ObtenerSaldoAsync(NegocioId, MiembroId));
+    }
+
+    /// <summary>The positive half of the same fix: a real member whose ledger sums to exactly 0
+    /// still gets a normal 200 with 0 — the lookup must not turn a legitimate zero into a 404.</summary>
+    [Fact]
+    public async Task Saldo_de_un_miembro_real_sin_movimientos_es_cero_y_no_lanza()
+    {
+        var servicio = CrearServicio(out _, out _);
+
+        var saldo = await servicio.ObtenerSaldoAsync(NegocioId, MiembroId);
+
+        Assert.Equal(0m, saldo);
     }
 }

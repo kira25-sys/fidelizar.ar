@@ -96,20 +96,20 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   # ---------------------------------------------------------------------
-  # S2 · Buscar socio — pending
+  # S2 · Buscar socio — implemented
   # ---------------------------------------------------------------------
   /miembros:
     get:
       tags: [Miembros]
       summary: S2 Buscar socio — search by name (FUNCTIONAL-SPEC §4)
-      x-status: pending
-      x-pending-service: >
-        No search method exists on IMiembroRepository and no Application use case wraps
-        one. Needs a query against NombreNormalizado (accent/case-insensitive, any-word
-        match, from the 3rd character) plus homonym disambiguation data (member number,
-        FechaAlta). There is deliberately no "list all members" variant of this endpoint
-        for any role below Dueño (FUNCTIONAL-SPEC §4, ARCHITECTURE §8) — omitting the query
-        parameter must not return a listing.
+      x-status: implemented
+      description: >
+        Backed by IMiembroBusquedaService.BuscarAsync, which queries NombreNormalizado
+        (any query word must appear as a substring — accent/case folding already baked
+        into NombreNormalizado) and rejects a query under 3 normalised characters with
+        400 BUSQUEDA_MUY_CORTA rather than falling back to a listing. There is
+        deliberately no "list all members" variant of this endpoint for any role below
+        Dueño (FUNCTIONAL-SPEC §4, ARCHITECTURE §8).
       security: [{ cookieAuth: [] }]
       parameters:
         - name: q
@@ -165,10 +165,9 @@ paths:
       summary: S3 Ficha del socio — balance and cutoff date only
       x-status: implemented
       description: >
-        Implemented because it is backed entirely by existing services (ISaldoService +
-        ICorteService). Known gap: cannot distinguish an unknown miembroId from a member
-        whose balance is genuinely zero — both return 0, since no Miembro lookup exists
-        yet to check the id is real. See docs/REST-CONTRACT-F1.md.
+        Backed by ISaldoService + ICorteService. ISaldoService.ObtenerSaldoAsync looks the
+        member up before computing SUM(Monto), so an unknown miembroId — or one that belongs
+        to a different Negocio — 404s instead of returning a misleading 0.
       security: [{ cookieAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/MiembroId'
@@ -180,6 +179,11 @@ paths:
               schema: { $ref: '#/components/schemas/SaldoMiembroResponse' }
         "401":
           $ref: '#/components/responses/Unauthorized'
+        "404":
+          description: No member with this id exists for the caller's Negocio.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         "409":
           description: No Corte declared for this Negocio yet (CORTE_NO_DECLARADO).
           content:
@@ -190,12 +194,13 @@ paths:
     get:
       tags: [Miembros]
       summary: S3 Ficha del socio — the full counter view (name, number, alerts)
-      x-status: pending
-      x-pending-service: >
-        Needs IMiembroRepository.GetByIdAsync (does not exist) plus an alert-building use
-        case: birthday (RN-11, needs only Miembro), allergy/diet (needs Consentimiento +
-        PerfilMiembro — PerfilMiembro is phase 3, F3-01). Until then the counter screen can
-        only show what /miembros/{id}/saldo returns.
+      x-status: implemented
+      description: >
+        Backed by IFichaMostradorService, which 404s an unknown/another-business's
+        miembroId (IMiembroRepository.GetByIdAsync) and builds the alert strip. Phase 1
+        can only ever populate the Cumpleanos alert (RN-11: notice from 2 days before,
+        day/month only) — AlergiaODieta needs PerfilMiembro (phase 3, F3-01) and
+        ComprasHabituales needs phase-4 aggregation, so neither is ever produced yet.
       security: [{ cookieAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/MiembroId'
@@ -205,16 +210,23 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/FichaMostradorResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          description: No member with this id exists for the caller's Negocio.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   /miembros/{miembroId}/completo:
     get:
       tags: [Miembros]
       summary: S6 Ficha completa (Encargada/Dueño only)
-      x-status: pending
-      x-pending-service: >
-        Needs the same Miembro lookup as ficha-mostrador plus phone/DNI/consent history, and
-        must write a RegistroAuditoria row ("VerFichaCompleta", DATA-MODEL §2) on every read
-        — no Application service does either today.
+      x-status: implemented
+      description: >
+        Backed by IFichaCompletaService — the same Miembro lookup as ficha-mostrador,
+        plus phone/DNI, plus a RegistroAuditoria row ("VerFichaCompleta", DATA-MODEL §2)
+        written on every single read, not only the first.
       security: [{ cookieAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/MiembroId'
@@ -224,6 +236,13 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/FichaCompletaResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          description: No member with this id exists for the caller's Negocio.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   # ---------------------------------------------------------------------
   # S4 · Registrar canje — implemented
@@ -258,17 +277,17 @@ paths:
           $ref: '#/components/responses/Unauthorized'
 
   # ---------------------------------------------------------------------
-  # S7 · Historial de movimientos — pending
+  # S7 · Historial de movimientos — implemented
   # ---------------------------------------------------------------------
   /miembros/{miembroId}/movimientos:
     get:
       tags: [Movimientos]
       summary: S7 Historial de movimientos (Encargada/Dueño only)
-      x-status: pending
-      x-pending-service: >
-        IMovimientoRepository.GetPorMiembroAsync already exists, but no Application use
-        case wraps it — a controller must not call a repository directly (ARCHITECTURE §3),
-        so an endpoint here needs a small IHistorialMovimientosService first.
+      x-status: implemented
+      description: >
+        Backed by IHistorialMovimientosService, a thin wrapper over
+        IMovimientoRepository.GetPorMiembroAsync that also resolves each movement's
+        UsuarioNombre and 404s an unknown/another-business's miembroId.
       security: [{ cookieAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/MiembroId'
@@ -280,19 +299,27 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/MovimientoResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          description: No member with this id exists for the caller's Negocio.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   # ---------------------------------------------------------------------
-  # S8 · Anular movimiento — pending
+  # S8 · Anular movimiento — implemented
   # ---------------------------------------------------------------------
   /movimientos/{movimientoId}/anular:
     post:
       tags: [Movimientos]
       summary: S8 Anular movimiento — writes an Ajuste, never an edit (I1)
-      x-status: pending
-      x-pending-service: >
-        Needs an IAnulacionMovimientoService: looks up the original movement, writes a new
-        Ajuste of -Monto with a mandatory reason and the acting user (I1, I3). No such
-        service or repository lookup-by-id exists on IMovimientoRepository today.
+      x-status: implemented
+      description: >
+        Backed by IAnulacionMovimientoService: looks up the original movement
+        (IMovimientoRepository.GetByIdAsync, 404 for an unknown id or one belonging to
+        another Negocio) and writes a new Ajuste of -Monto with the mandatory reason and
+        the acting user from the JWT (I1, I3).
       security: [{ cookieAuth: [] }]
       parameters:
         - name: movimientoId
@@ -311,18 +338,36 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/MovimientoResponse' }
+        "400":
+          description: MOTIVO_REQUERIDO — every Ajuste needs a reason (I3).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          description: No movement with this id exists for the caller's Negocio.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   # ---------------------------------------------------------------------
-  # S9 · Cierre diario de canjes — pending
+  # S9 · Cierre diario de canjes — implemented
   # ---------------------------------------------------------------------
   /sucursales/{sucursalId}/cierre-diario:
     get:
       tags: [Sucursales]
       summary: S9 Cierre diario de canjes (Encargada/Dueño only)
-      x-status: pending
-      x-pending-service: >
-        Needs an ICierreDiarioService that reads a branch's Canje movements for one day
-        with member, cashier and reason — no such aggregation exists yet.
+      x-status: implemented
+      description: >
+        Backed by ICierreDiarioService, which reads a business's Canje movements for one
+        day and narrows them to one branch. A Canje carries no SucursalId of its own
+        (DATA-MODEL §4 — branch is organisational, RN-07): "this branch's redemptions"
+        means the ones registered by a cashier stationed at it (Usuario.SucursalId), not
+        the member's own branch, so a redemption for a member from another branch still
+        shows up here. Enforces the branch axis: an Encargada tied to one branch may only
+        ask for that branch's own cierre (403 otherwise); Dueño has no branch claim and
+        can ask for any.
       security: [{ cookieAuth: [] }]
       parameters:
         - name: sucursalId
@@ -339,19 +384,23 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CierreDiarioResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          description: The caller's own branch (Encargada) is not this sucursalId.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   # ---------------------------------------------------------------------
-  # S10 · Usuarios y sucursales — pending
+  # S10 · Usuarios y sucursales — implemented
   # ---------------------------------------------------------------------
   /usuarios:
     get:
       tags: [Usuarios]
       summary: S10 Usuarios — list (Dueño only)
-      x-status: pending
-      x-pending-service: >
-        IUsuarioRepository has no list method and no Application service wraps user
-        management — only ObtenerPorEmailAsync/CrearAsync/DesactivarAsync exist, used by
-        AuthService for login. Needs an IUsuarioService for S10's CRUD.
+      x-status: implemented
+      description: Backed by IUsuarioService.ListarAsync (IUsuarioRepository.ListarAsync is new).
       security: [{ cookieAuth: [] }]
       responses:
         "200":
@@ -361,11 +410,16 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/UsuarioResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
     post:
       tags: [Usuarios]
       summary: S10 Usuarios — create (Dueño only)
-      x-status: pending
-      x-pending-service: Same IUsuarioService gap as the GET above.
+      x-status: implemented
+      description: >
+        Backed by IUsuarioService.CrearAsync. Rol travels as text and is parsed against
+        Domain's RolUsuario in Api — Sistema is rejected explicitly even though it is a
+        valid CLR enum member, because no account may ever be created under it.
       security: [{ cookieAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
@@ -380,13 +434,25 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/UsuarioResponse' }
+        "400":
+          description: ROL_INVALIDO, or SUCURSAL_REQUERIDA/SUCURSAL_NO_APLICA (DATA-MODEL §2).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "409":
+          description: USUARIO_EMAIL_DUPLICADO — an account with that email already exists.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   /sucursales:
     get:
       tags: [Sucursales]
       summary: S10 Sucursales — list (Dueño only)
-      x-status: pending
-      x-pending-service: No ISucursalRepository/ISucursalService exists yet.
+      x-status: implemented
+      description: Backed by ISucursalService.ListarAsync (ISucursalRepository is new).
       security: [{ cookieAuth: [] }]
       responses:
         "200":
@@ -396,11 +462,13 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/SucursalResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
     post:
       tags: [Sucursales]
       summary: S10 Sucursales — create (Dueño only)
-      x-status: pending
-      x-pending-service: Same ISucursalService gap as the GET above.
+      x-status: implemented
+      description: Backed by ISucursalService.CrearAsync.
       security: [{ cookieAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
@@ -415,6 +483,13 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SucursalResponse' }
+        "400":
+          description: NOMBRE_REQUERIDO.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
 
 components:
   securitySchemes:
@@ -524,13 +599,18 @@ components:
     # ---- Pending — documented shape, not yet a C# type in Shared ----
     MiembroResumen:
       type: object
-      description: S2 search result row — name, member number, balance. Nothing else (FUNCTIONAL-SPEC §4).
+      description: >
+        S2 search result row — name, member number, balance. Nothing else
+        (FUNCTIONAL-SPEC §4). corteFecha closes the gap FLOW-S2-S5.md §1.4 flagged: R3
+        ("not in any screen") requires the stale-data badge next to every rendered
+        balance, including a search result row.
       properties:
         id: { type: integer }
         nombre: { type: string }
         numeroSocio: { type: string, nullable: true }
         saldo: { type: number, format: double }
         fechaAlta: { type: string, format: date, description: Shown only to disambiguate homonyms. }
+        corteFecha: { type: string, format: date }
 
     FichaMostradorResponse:
       type: object

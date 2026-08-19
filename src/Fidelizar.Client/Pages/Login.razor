@@ -1,0 +1,149 @@
+@page "/ingreso"
+@using System.ComponentModel.DataAnnotations
+@using Fidelizar.Shared.Auth
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
+
+@* S1 Ingreso (FUNCTIONAL-SPEC §13.2): full login per shift, no short auto-lock — a cashier signs
+   in once at the start of the shift and signs out at the end. Not the product's autofocus screen:
+   FLOW-S2-S5 §1.1 reserves the one autofocus in the product for S2's search field. *@
+
+<PageTitle>Ingresar — Fidelizar</PageTitle>
+
+<div class="page form-column">
+    <h1 tabindex="-1">Ingresar</h1>
+
+    <ErrorNotice Problem="_problem" />
+
+    <form class="login-form" novalidate @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault="true">
+        <div class="field">
+            <label for="email">Email</label>
+            <input
+                id="email"
+                class="input"
+                type="email"
+                autocomplete="username"
+                @bind="_email"
+                @bind:event="oninput"
+                @ref="_emailInput"
+                aria-invalid="@(_fieldErrors.ContainsKey(nameof(LoginRequest.Email)) ? "true" : "false")"
+                aria-describedby="email-error" />
+            @if (_fieldErrors.TryGetValue(nameof(LoginRequest.Email), out var emailError))
+            {
+                <span id="email-error" class="field-error">@emailError</span>
+            }
+        </div>
+
+        <div class="field">
+            <label for="password">Contraseña</label>
+            <input
+                id="password"
+                class="input"
+                type="password"
+                autocomplete="current-password"
+                @bind="_password"
+                @bind:event="oninput"
+                @ref="_passwordInput"
+                aria-invalid="@(_fieldErrors.ContainsKey(nameof(LoginRequest.Password)) ? "true" : "false")"
+                aria-describedby="password-error" />
+            @if (_fieldErrors.TryGetValue(nameof(LoginRequest.Password), out var passwordError))
+            {
+                <span id="password-error" class="field-error">@passwordError</span>
+            }
+        </div>
+
+        <button
+            type="submit"
+            class="btn btn--primary"
+            disabled="@_submitting"
+            aria-busy="@(_submitting ? "true" : "false")">
+            Ingresar
+        </button>
+    </form>
+</div>
+
+@code {
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private bool _submitting;
+    private ApiProblem? _problem;
+    private readonly Dictionary<string, string> _fieldErrors = new();
+    private ElementReference _emailInput;
+    private ElementReference _passwordInput;
+
+    protected override void OnInitialized()
+    {
+        // Already signed in (e.g. a bookmarked /ingreso mid-shift) — nothing to do here.
+        if (SessionService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/", replace: true);
+        }
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        // disabled (not just aria-busy) is what stops a second Enter — DESIGN-SYSTEM §9.5.
+        if (_submitting)
+        {
+            return;
+        }
+
+        var request = new LoginRequest(_email.Trim(), _password);
+        if (!await ValidateAsync(request))
+        {
+            return;
+        }
+
+        _submitting = true;
+        _problem = null;
+        StateHasChanged();
+
+        var result = await SessionService.LoginAsync(request.Email, request.Password);
+
+        if (result.Success)
+        {
+            Navigation.NavigateTo("/", replace: true);
+            return; // component is about to be torn down by the navigation
+        }
+
+        _submitting = false;
+        _problem = result.Problem;
+    }
+
+    /// <summary>
+    /// Reuses LoginRequest's own DataAnnotations (Fidelizar.Shared) so the client-side message is
+    /// never a second copy of the server's — one Spanish string per rule, defined once.
+    /// </summary>
+    private async Task<bool> ValidateAsync(LoginRequest request)
+    {
+        _fieldErrors.Clear();
+
+        var results = new List<ValidationResult>();
+        Validator.TryValidateObject(request, new ValidationContext(request), results, validateAllProperties: true);
+
+        foreach (var result in results)
+        {
+            foreach (var member in result.MemberNames)
+            {
+                _fieldErrors.TryAdd(member, result.ErrorMessage ?? string.Empty);
+            }
+        }
+
+        if (_fieldErrors.Count == 0)
+        {
+            return true;
+        }
+
+        if (_fieldErrors.ContainsKey(nameof(LoginRequest.Email)))
+        {
+            await _emailInput.FocusAsync();
+        }
+        else if (_fieldErrors.ContainsKey(nameof(LoginRequest.Password)))
+        {
+            await _passwordInput.FocusAsync();
+        }
+
+        StateHasChanged();
+        return false;
+    }
+}

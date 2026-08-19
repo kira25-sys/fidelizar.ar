@@ -1,11 +1,48 @@
 @page "/"
+@implements IDisposable
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
 
-@* Placeholder — F1-05 replaces this with S2 Buscar socio. *@
+@* S2 Buscar socio cannot be built yet: GET /api/miembros?q= is documented but has no controller
+   (docs/REST-CONTRACT-F1.md, x-status: pending) and Fidelizar.Shared has no MiembroResumen type
+   to compile against — Client references only Shared (ARCHITECTURE §3), never a hand-shaped
+   response. See F1-05's report for the full blocker. This page just gates "/" behind a session
+   (S1's job) and says plainly why S2 is not here yet, instead of a screen that cannot search. *@
 
 <PageTitle>Fidelizar</PageTitle>
 
-<h1 tabindex="-1">Fidelizar</h1>
+@if (SessionService.IsAuthenticated)
+{
+    <h1 tabindex="-1">Fidelizar</h1>
 
-<p class="home-note">
-    Shell provisorio (F1-04c). Todavía no hay pantallas — F1-05 en adelante las construye.
-</p>
+    <p class="home-note">
+        Sesión iniciada como @SessionService.Current?.NombreCompleto.
+        La búsqueda de socios (S2) todavía no está disponible: falta el endpoint
+        <code>GET /api/miembros?q=</code> en el backend. F1-05 continúa esta pantalla en cuanto
+        ese endpoint y el tipo <code>MiembroResumen</code> existan en <code>Fidelizar.Shared</code>.
+    </p>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        SessionService.Changed += OnSessionChanged;
+        RedirectIfAnonymous();
+    }
+
+    private void OnSessionChanged()
+    {
+        RedirectIfAnonymous();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void RedirectIfAnonymous()
+    {
+        if (!SessionService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/ingreso", replace: true);
+        }
+    }
+
+    public void Dispose() => SessionService.Changed -= OnSessionChanged;
+}

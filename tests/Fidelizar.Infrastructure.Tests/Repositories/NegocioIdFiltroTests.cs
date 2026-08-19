@@ -33,7 +33,7 @@ public class NegocioIdFiltroTests
     private static readonly string[] NombresDeDbSet =
     [
         "Sucursales", "Miembros", "MovimientosCredito", "Cortes", "ConfiguracionesPrograma",
-        "Usuarios", "RegistrosAuditoria",
+        "Usuarios", "RegistrosAuditoria", "Consentimientos",
     ];
 
     [Fact]

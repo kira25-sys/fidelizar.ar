@@ -178,6 +178,29 @@ public class FidelizarDbContextModelTests
     }
 
     [Fact]
+    public void Consentimiento_esta_mapeado_con_NegocioId_no_nullable()
+    {
+        var entidad = GetEntity<Consentimiento>(BuildModel());
+
+        Assert.NotNull(entidad);
+        Assert.False(entidad.FindProperty(nameof(Consentimiento.NegocioId))!.IsNullable);
+    }
+
+    [Fact]
+    public void Consentimiento_tiene_indice_por_MiembroId_y_Tipo()
+    {
+        // F1-08: lo que hace barata la lectura de "la fila más nueva para (MiembroId, Tipo)" —
+        // sin ser único, porque la tabla es append-only (DATA-MODEL §3).
+        var entidad = GetEntity<Consentimiento>(BuildModel());
+
+        var indice = entidad.GetIndexes().Single(i =>
+            i.Properties.Select(p => p.Name).SequenceEqual(
+                [nameof(Consentimiento.MiembroId), nameof(Consentimiento.Tipo)]));
+
+        Assert.False(indice.IsUnique);
+    }
+
+    [Fact]
     public void Usuario_y_RegistroAuditoria_estan_mapeados()
     {
         var model = BuildModel();

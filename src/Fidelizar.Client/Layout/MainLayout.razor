@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @inject ISessionService SessionService
+@inject NavigationManager Navigation
 @implements IDisposable
 
 @* No sidebar nav: FUNCTIONAL-SPEC §1 — search is the entry point, nothing to learn. *@
@@ -57,6 +58,12 @@
 
         _loggingOut = false;
         _logoutProblem = result.Success ? null : result.Problem;
+
+        if (result.Success)
+        {
+            // S1: end of shift lands back at the login screen, session state already cleared.
+            Navigation.NavigateTo("/ingreso", replace: true);
+        }
     }
 
     private void OnSessionChanged() => InvokeAsync(StateHasChanged);

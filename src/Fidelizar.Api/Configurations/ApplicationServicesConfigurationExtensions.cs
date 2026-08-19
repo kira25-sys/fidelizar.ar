@@ -15,6 +15,14 @@ public static class ApplicationServicesConfigurationExtensions
         services.AddScoped<ICorteService, CorteService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IConsentimientoService, ConsentimientoService>();
+        services.AddScoped<IMiembroBusquedaService, MiembroBusquedaService>();
+        services.AddScoped<IFichaMostradorService, FichaMostradorService>();
+        services.AddScoped<IFichaCompletaService, FichaCompletaService>();
+        services.AddScoped<IHistorialMovimientosService, HistorialMovimientosService>();
+        services.AddScoped<IAnulacionMovimientoService, AnulacionMovimientoService>();
+        services.AddScoped<ICierreDiarioService, CierreDiarioService>();
+        services.AddScoped<IUsuarioService, UsuarioService>();
+        services.AddScoped<ISucursalService, SucursalService>();
 
         return services;
     }

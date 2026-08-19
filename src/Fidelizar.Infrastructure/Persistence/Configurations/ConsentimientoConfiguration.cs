@@ -6,9 +6,10 @@ namespace Fidelizar.Infrastructure.Persistence.Configurations;
 
 /// <summary>
 /// Append-only, like <see cref="MovimientoCreditoConfiguration"/> — I1's discipline extended to
-/// consent by convention (DATA-MODEL §3), even though F0-09 does not yet build the repository
-/// that would enforce "no Update, no Delete" the way <c>IMovimientoRepository</c> does. That
-/// repository is F1-08's job; this migration only shapes the table.
+/// consent (DATA-MODEL §3). F1-08 added the repository that actually enforces "no Update, no
+/// Delete" for this table (<c>Fidelizar.Domain.Repositories.IConsentimientoRepository</c>,
+/// implemented by <c>Fidelizar.Infrastructure.Repositories.ConsentimientoRepository</c>); this
+/// class still only shapes the table.
 /// </summary>
 public sealed class ConsentimientoConfiguration : IEntityTypeConfiguration<Consentimiento>
 {

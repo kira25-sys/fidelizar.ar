@@ -14,6 +14,7 @@ public static class ApplicationServicesConfigurationExtensions
         services.AddScoped<ISaldoService, SaldoService>();
         services.AddScoped<ICorteService, CorteService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IConsentimientoService, ConsentimientoService>();
 
         return services;
     }

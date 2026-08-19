@@ -64,6 +64,12 @@ public sealed class MovimientoCreditoConfiguration : IEntityTypeConfiguration<Mo
 
         builder.Property(m => m.ConfiguracionId);
 
+        // README decision #6 (2026-08-19). Null for every type except Canje — the max length
+        // is generous for a client-generated key (a GUID is 36 chars) without inviting an
+        // unbounded value onto an indexed column.
+        builder.Property(m => m.ClaveIdempotencia)
+            .HasMaxLength(100);
+
         builder.HasIndex(m => new { m.NegocioId, m.MiembroId });
 
         builder.HasIndex(m => new { m.NegocioId, m.Periodo });
@@ -74,5 +80,13 @@ public sealed class MovimientoCreditoConfiguration : IEntityTypeConfiguration<Mo
             .IsUnique()
             .HasFilter($"\"Tipo\" = {(int)TipoMovimientoCredito.Acumulacion}")
             .HasDatabaseName("IX_MovimientosCredito_Acumulacion_Unica");
+
+        // README decision #6 (2026-08-19): the guarantee against a double-written Canje lives
+        // here, in the database — a check-then-insert in code cannot close the race between two
+        // simultaneous retries with the same key, this index can.
+        builder.HasIndex(m => new { m.NegocioId, m.ClaveIdempotencia })
+            .IsUnique()
+            .HasFilter("\"ClaveIdempotencia\" IS NOT NULL")
+            .HasDatabaseName("IX_MovimientosCredito_NegocioId_ClaveIdempotencia");
     }
 }

@@ -156,7 +156,8 @@ public sealed class MiembrosController(
 
         var movimiento = await saldoService.RegistrarCanjeAsync(
             new RegistrarCanjeRequest(
-                negocioId, miembroId, request.Monto, request.Motivo, usuarioId, request.FechaEfectiva, hoy),
+                negocioId, miembroId, request.Monto, request.Motivo, usuarioId, request.FechaEfectiva, hoy,
+                request.ClaveIdempotencia),
             cancellationToken);
 
         return Ok(new CanjeResponse(movimiento.Id, -movimiento.Monto, movimiento.FechaEfectiva, movimiento.SaldoResultante));

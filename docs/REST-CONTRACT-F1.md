@@ -108,8 +108,23 @@ from the token, never from the URL or the body.
   member, because no account may ever be created under it.
 - **`SucursalesController`** (`/api/sucursales`, S10, `DuenoOnly`) calls `ISucursalService`, which
   is new alongside `ISucursalRepository` — nothing built a branch before this task.
-- **`MiembrosController.RegistrarCanje`** (`POST /api/miembros/{id}/canjes`) — unchanged from
-  F1-04b, not touched by this task (README decision #6, idempotency, is still open).
+- **`MiembrosController.RegistrarCanje`** (`POST /api/miembros/{id}/canjes`) is idempotent on
+  `RegistrarCanjeRequest.ClaveIdempotencia` (README decision #6, resolved 2026-08-19). The client
+  generates one key per redemption *attempt*, not per logical redemption, and keeps it across a
+  retry after a lost response (FLOW-S2-S5.md §3.8: the cashier's connection drops, the screen
+  never confirms, she taps `Confirmar canje` again with the same values). `ISaldoService.RegistrarCanjeAsync`
+  checks `IMovimientoRepository.GetPorClaveIdempotenciaAsync` before validating anything else: a
+  key already on record, with a matching member/amount/date/reason, returns that original
+  `MovimientoCredito` — the controller serialises it into the exact same `CanjeResponse` the first
+  call would have produced, so a retry is indistinguishable from the first attempt succeeding. A
+  key already on record with **different** data throws `ConflictException("CLAVE_IDEMPOTENCIA_REUTILIZADA")`
+  (409) — reusing a key for a different redemption is a client bug, not a retry.
+  **The guarantee against two concurrent identical requests both writing a `Canje` lives in the
+  database**, not in that check: a unique partial index on `(NegocioId, ClaveIdempotencia)` (where
+  not null) rejects the loser's insert outright, and `MovimientoRepository.AppendAsync` translates
+  that specific Postgres unique-violation into the same `ConflictException`, which the service
+  catches by re-reading the winner and returning it — a check-then-insert with no index behind it
+  would leave exactly the race this decision exists to close.
 - **Auth (S1)** — unchanged from F1-03/F1-04b.
 
 ## S5 Alta de socio — still pending, deliberately

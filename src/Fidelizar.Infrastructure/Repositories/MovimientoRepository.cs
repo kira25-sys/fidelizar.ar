@@ -1,7 +1,9 @@
 using Fidelizar.Domain.Entities;
+using Fidelizar.Domain.Exceptions;
 using Fidelizar.Domain.Repositories;
 using Fidelizar.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Fidelizar.Infrastructure.Repositories;
 
@@ -37,6 +39,11 @@ public sealed class MovimientoRepository(FidelizarDbContext dbContext) : IMovimi
     public Task<MovimientoCredito?> GetByIdAsync(int negocioId, long id, CancellationToken cancellationToken = default) =>
         dbContext.MovimientosCredito.SingleOrDefaultAsync(m => m.NegocioId == negocioId && m.Id == id, cancellationToken);
 
+    public Task<MovimientoCredito?> GetPorClaveIdempotenciaAsync(
+        int negocioId, string claveIdempotencia, CancellationToken cancellationToken = default) =>
+        dbContext.MovimientosCredito.SingleOrDefaultAsync(
+            m => m.NegocioId == negocioId && m.ClaveIdempotencia == claveIdempotencia, cancellationToken);
+
     public async Task<IReadOnlyList<MovimientoCredito>> GetPorFechaEfectivaYTipoAsync(
         int negocioId, DateOnly fechaEfectiva, TipoMovimientoCredito tipo, CancellationToken cancellationToken = default) =>
         await dbContext.MovimientosCredito
@@ -61,10 +68,30 @@ public sealed class MovimientoRepository(FidelizarDbContext dbContext) : IMovimi
         movimiento.FijarSaldoResultante(saldoActual + movimiento.Monto);
 
         dbContext.MovimientosCredito.Add(movimiento);
-        await dbContext.SaveChangesAsync(cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (EsViolacionDeClaveIdempotencia(ex))
+        {
+            // README decision #6: two concurrent retries with the same key both reached this
+            // point past the application-level check in SaldoService — the unique partial index
+            // on (NegocioId, ClaveIdempotencia) is what actually stops the second row, and this is
+            // that stop surfacing. The caller re-reads the winner via GetPorClaveIdempotenciaAsync
+            // and returns it instead of treating this as a failure.
+            await transaction.RollbackAsync(cancellationToken);
+            throw new ConflictException(
+                "Ya existe un canje registrado con esta clave de idempotencia.",
+                "CLAVE_IDEMPOTENCIA_EN_USO");
+        }
 
         return movimiento;
     }
+
+    private static bool EsViolacionDeClaveIdempotencia(DbUpdateException ex) =>
+        ex.InnerException is PostgresException pg
+        && pg.SqlState == PostgresErrorCodes.UniqueViolation
+        && pg.ConstraintName == "IX_MovimientosCredito_NegocioId_ClaveIdempotencia";
 }

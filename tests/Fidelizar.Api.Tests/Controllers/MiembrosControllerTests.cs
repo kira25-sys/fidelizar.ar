@@ -86,7 +86,7 @@ public class MiembrosControllerTests
                 TipoMovimientoCredito.Canje, -300m, new DateOnly(2026, 8, 18), UsuarioId, "Canje de prueba"),
         };
         var controller = CrearControlador(saldoService);
-        var request = new CanjeRequest(300m, new DateOnly(2026, 8, 18), "Canje de prueba");
+        var request = new CanjeRequest(300m, new DateOnly(2026, 8, 18), "Canje de prueba", "clave-idempotencia-prueba");
 
         var resultado = await controller.RegistrarCanje(MiembroId, request, CancellationToken.None);
 
@@ -96,6 +96,7 @@ public class MiembrosControllerTests
         Assert.Equal(MiembroId, saldoService.UltimoRequest.MiembroId);
         Assert.Equal(UsuarioId, saldoService.UltimoRequest.UsuarioId);
         Assert.Equal(300m, saldoService.UltimoRequest.Monto);
+        Assert.Equal("clave-idempotencia-prueba", saldoService.UltimoRequest.ClaveIdempotencia);
     }
 
     [Fact]
@@ -108,7 +109,7 @@ public class MiembrosControllerTests
                 TipoMovimientoCredito.Canje, -300m, new DateOnly(2026, 8, 18), UsuarioId, "Canje de prueba"),
         };
         var controller = CrearControlador(saldoService);
-        var request = new CanjeRequest(300m, new DateOnly(2026, 8, 18), "Canje de prueba");
+        var request = new CanjeRequest(300m, new DateOnly(2026, 8, 18), "Canje de prueba", "clave-idempotencia-prueba");
 
         var resultado = await controller.RegistrarCanje(MiembroId, request, CancellationToken.None);
 

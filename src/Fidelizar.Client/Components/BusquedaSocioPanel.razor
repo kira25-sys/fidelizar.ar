@@ -28,7 +28,7 @@
             placeholder="Nombre del socio…"
             value="@_query"
             @oninput="OnInputAsync"
-            @onkeydown="OnKeyDownAsync"
+            @onkeydown="OnKeyDown"
             @ref="_inputRef" />
         @if (_buscando)
         {
@@ -256,7 +256,7 @@
     /// preventDefault: this is a plain, form-less text input, so none of ArrowUp/Down, Home/End,
     /// Enter or Escape triggers a browser default action worth suppressing (Home/End moving the
     /// caret is the only one, and it is harmless alongside the listbox's own navigation).</summary>
-    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    private void OnKeyDown(KeyboardEventArgs e)
     {
         switch (e.Key)
         {
@@ -302,7 +302,6 @@
         }
 
         StateHasChanged();
-        await Task.CompletedTask;
     }
 
     private void MoverActivo(int delta)

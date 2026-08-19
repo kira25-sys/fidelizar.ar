@@ -1,3 +1,5 @@
+using Fidelizar.Domain.Exceptions;
+
 namespace Fidelizar.Domain.Entities;
 
 /// <summary>
@@ -33,6 +35,12 @@ public sealed class Consentimiento
     {
     }
 
+    /// <summary>
+    /// The only way to build a <see cref="Consentimiento"/> row, grant or withdrawal alike —
+    /// both are just rows with a different <paramref name="otorgado"/>. Validates
+    /// <paramref name="versionTexto"/> is present: recording *that* something was agreed without
+    /// recording *which wording* defeats the audit trail this table exists for.
+    /// </summary>
     public static Consentimiento Registrar(
         int negocioId,
         int miembroId,
@@ -41,8 +49,16 @@ public sealed class Consentimiento
         string versionTexto,
         CanalConsentimiento canal,
         DateTime ocurridoEn,
-        int? registradoPorUsuarioId = null) =>
-        new()
+        int? registradoPorUsuarioId = null)
+    {
+        if (string.IsNullOrWhiteSpace(versionTexto))
+        {
+            throw new ValidationException(
+                "El consentimiento tiene que registrar qué versión del texto se aceptó (o rechazó).",
+                "VERSION_TEXTO_REQUERIDA");
+        }
+
+        return new()
         {
             NegocioId = negocioId,
             MiembroId = miembroId,
@@ -53,4 +69,5 @@ public sealed class Consentimiento
             RegistradoPorUsuarioId = registradoPorUsuarioId,
             OcurridoEn = ocurridoEn,
         };
+    }
 }

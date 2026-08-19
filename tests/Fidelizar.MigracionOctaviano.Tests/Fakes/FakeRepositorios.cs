@@ -130,7 +130,11 @@ public sealed class FakeCorteRepository : ICorteRepository
     }
 }
 
-public sealed class FakeConsentimientoRepository : IConsentimientoRepository
+// Fully qualified for the same reason as FakeNegocioRepository above: F1-08 adds a real
+// Fidelizar.Domain.Repositories.IConsentimientoRepository with a different, richer contract.
+// This fake implements only the tool-local Destino.IConsentimientoRepository MigradorOctaviano
+// actually depends on.
+public sealed class FakeConsentimientoRepository : Destino.IConsentimientoRepository
 {
     private static readonly PropertyInfo IdProperty =
         typeof(Consentimiento).GetProperty(nameof(Consentimiento.Id))!;

@@ -57,7 +57,13 @@ public sealed class MigradorOctaviano(
     IConfiguracionProgramaRepository configuracionRepository,
     IMiembroRepository miembroRepository,
     IMovimientoRepository movimientoRepository,
-    IConsentimientoRepository consentimientoRepository,
+    // Fully qualified for the same reason as Destino.INegocioRepository above: F1-08 adds a real
+    // Fidelizar.Domain.Repositories.IConsentimientoRepository with a different, richer contract
+    // (GetVigenteAsync, GetHistorialAsync — reads the Application layer needs, this tool does
+    // not). This tool keeps its own tool-local Destino.IConsentimientoRepository unchanged: its
+    // ExisteAsync/CrearAsync shape is already gate-verified against real production data
+    // (ROADMAP, F0-11) and 879 migrated rows depend on nothing about it changing.
+    Destino.IConsentimientoRepository consentimientoRepository,
     ICorteRepository corteRepository)
 {
     // Usuario es F1-03 y todavía no existe (igual que MovimientoCredito.UsuarioId en el resto

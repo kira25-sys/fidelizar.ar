@@ -39,6 +39,7 @@ public static class InfrastructureConfigurationExtensions
         services.AddScoped<IRegistroAuditoriaRepository, RegistroAuditoriaRepository>();
         services.AddScoped<INegocioRepository, NegocioRepository>();
         services.AddScoped<IConsentimientoRepository, ConsentimientoRepository>();
+        services.AddScoped<ISucursalRepository, SucursalRepository>();
 
         // ARCHITECTURE §3: Application depends on IPasswordHasher only, never on ASP.NET Core
         // Identity directly — this is the one place that wires the real implementation in.

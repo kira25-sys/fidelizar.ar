@@ -35,6 +35,8 @@ public class MiembrosControllerTests
         FakeFichaMostradorService? fichaMostradorService = null,
         FakeFichaCompletaService? fichaCompletaService = null,
         FakeHistorialMovimientosService? historialMovimientosService = null,
+        FakeAltaMiembroService? altaMiembroService = null,
+        FakeConsentimientoTextoService? consentimientoTextoService = null,
         string rol = "Cajero")
     {
         var controller = new MiembrosController(
@@ -43,7 +45,9 @@ public class MiembrosControllerTests
             busquedaService ?? new FakeMiembroBusquedaService(),
             fichaMostradorService ?? new FakeFichaMostradorService(),
             fichaCompletaService ?? new FakeFichaCompletaService(),
-            historialMovimientosService ?? new FakeHistorialMovimientosService());
+            historialMovimientosService ?? new FakeHistorialMovimientosService(),
+            altaMiembroService ?? new FakeAltaMiembroService(),
+            consentimientoTextoService ?? new FakeConsentimientoTextoService());
 
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
         [
@@ -200,6 +204,96 @@ public class MiembrosControllerTests
         Assert.Equal("Ana Cajera", respuesta[0].UsuarioNombre);
     }
 
+    [Fact]
+    public async Task RegistrarAlta_propaga_NegocioId_y_UsuarioId_del_token_al_servicio()
+    {
+        var altaService = new FakeAltaMiembroService
+        {
+            MiembroARetornar = new Miembro
+            {
+                NegocioId = NegocioId,
+                Nombre = "Ana Gómez",
+                NombreNormalizado = "ana gomez",
+                FechaAlta = new DateOnly(2026, 8, 19),
+                ActualizadoEn = DateTime.UtcNow,
+            },
+        };
+        var corteService = new FakeCorteService { CorteARetornar = Corte.Declarar(NegocioId, new DateOnly(2026, 8, 4), UsuarioId, DateTime.UtcNow) };
+        var controller = CrearControlador(corteService: corteService, altaMiembroService: altaService);
+        var request = new AltaMiembroRequest("Ana Gómez", null, null, null, null, null, null, true, false);
+
+        var resultado = await controller.RegistrarAlta(request, CancellationToken.None);
+
+        Assert.IsType<CreatedAtActionResult>(resultado);
+        Assert.NotNull(altaService.UltimaSolicitud);
+        Assert.Equal(NegocioId, altaService.UltimaSolicitud!.NegocioId);
+        Assert.Equal(UsuarioId, altaService.UltimaSolicitud.UsuarioId);
+        Assert.Equal("Ana Gómez", altaService.UltimaSolicitud.Nombre);
+        Assert.True(altaService.UltimaSolicitud.ConsentimientoDatosPersonales);
+        Assert.False(altaService.UltimaSolicitud.ConsentimientoDatosSensibles);
+    }
+
+    [Fact]
+    public async Task RegistrarAlta_devuelve_201_con_el_resumen_y_saldo_cero()
+    {
+        var altaService = new FakeAltaMiembroService
+        {
+            MiembroARetornar = new Miembro
+            {
+                Id = MiembroId,
+                NegocioId = NegocioId,
+                Nombre = "Ana Gómez",
+                NombreNormalizado = "ana gomez",
+                FechaAlta = new DateOnly(2026, 8, 19),
+                ActualizadoEn = DateTime.UtcNow,
+            },
+        };
+        var corteService = new FakeCorteService { CorteARetornar = Corte.Declarar(NegocioId, new DateOnly(2026, 8, 4), UsuarioId, DateTime.UtcNow) };
+        var controller = CrearControlador(corteService: corteService, altaMiembroService: altaService);
+        var request = new AltaMiembroRequest("Ana Gómez", null, null, null, null, null, null, true, false);
+
+        var resultado = await controller.RegistrarAlta(request, CancellationToken.None);
+
+        var creado = Assert.IsType<CreatedAtActionResult>(resultado);
+        var respuesta = Assert.IsType<MiembroResumen>(creado.Value);
+        Assert.Equal(MiembroId, respuesta.Id);
+        Assert.Equal(0m, respuesta.Saldo);
+        Assert.Equal(new DateOnly(2026, 8, 4), respuesta.CorteFecha);
+    }
+
+    [Fact]
+    public async Task ObtenerConsentimientoTexto_devuelve_el_texto_resuelto_del_servicio()
+    {
+        var textoService = new FakeConsentimientoTextoService
+        {
+            ResultadoARetornar = new ConsentimientoTextoResultado(
+                TipoConsentimiento.DatosPersonales, "DatosPersonales-2026-08-19-v1", "texto resuelto"),
+        };
+        var controller = CrearControlador(consentimientoTextoService: textoService);
+
+        var resultado = await controller.ObtenerConsentimientoTexto("DatosPersonales", CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(resultado);
+        var respuesta = Assert.IsType<ConsentimientoTextoResponse>(ok.Value);
+        Assert.Equal("DatosPersonales", respuesta.Tipo);
+        Assert.Equal("DatosPersonales-2026-08-19-v1", respuesta.VersionTexto);
+        Assert.Equal("texto resuelto", respuesta.Texto);
+
+        // I8: el NegocioId sale del token, nunca de la URL ni del cuerpo.
+        Assert.Equal(NegocioId, textoService.NegocioIdRecibido);
+    }
+
+    [Fact]
+    public async Task ObtenerConsentimientoTexto_con_tipo_invalido_lanza_ValidationException()
+    {
+        var controller = CrearControlador();
+
+        var ex = await Assert.ThrowsAsync<Fidelizar.Domain.Exceptions.ValidationException>(
+            () => controller.ObtenerConsentimientoTexto("NoExiste", CancellationToken.None));
+
+        Assert.Equal("TIPO_CONSENTIMIENTO_INVALIDO", ex.ErrorCode);
+    }
+
     [Theory]
     [InlineData(nameof(MiembrosController.ObtenerSaldo))]
     [InlineData(nameof(MiembrosController.RegistrarCanje))]
@@ -207,6 +301,8 @@ public class MiembrosControllerTests
     [InlineData(nameof(MiembrosController.FichaMostrador))]
     [InlineData(nameof(MiembrosController.FichaCompleta))]
     [InlineData(nameof(MiembrosController.HistorialMovimientos))]
+    [InlineData(nameof(MiembrosController.RegistrarAlta))]
+    [InlineData(nameof(MiembrosController.ObtenerConsentimientoTexto))]
     public void Cada_accion_exige_una_policy_de_autorizacion(string nombreAccion)
     {
         var metodo = typeof(MiembrosController).GetMethod(nombreAccion)!;
@@ -230,10 +326,12 @@ public class MiembrosControllerTests
         Assert.Contains(autorizan, a => a.Policy == Policies.EncargadaOrAbove);
     }
 
-    [Fact]
-    public void RegistrarCanje_exige_token_antifalsificacion()
+    [Theory]
+    [InlineData(nameof(MiembrosController.RegistrarCanje))]
+    [InlineData(nameof(MiembrosController.RegistrarAlta))]
+    public void Cada_POST_exige_token_antifalsificacion(string nombreAccion)
     {
-        var metodo = typeof(MiembrosController).GetMethod(nameof(MiembrosController.RegistrarCanje))!;
+        var metodo = typeof(MiembrosController).GetMethod(nombreAccion)!;
 
         Assert.Contains(
             metodo.GetCustomAttributes(inherit: true),

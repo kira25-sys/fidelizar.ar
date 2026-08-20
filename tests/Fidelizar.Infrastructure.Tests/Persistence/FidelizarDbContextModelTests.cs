@@ -154,6 +154,18 @@ public class FidelizarDbContextModelTests
     }
 
     [Fact]
+    public void Negocio_Domicilio_es_texto_nullable()
+    {
+        // Resuelve el placeholder [DOMICILIO] del texto de consentimiento DatosPersonales
+        // (TextosConsentimiento) — nunca un literal de negocio en código (F1-idempotencia-y-alta).
+        var entidad = GetEntity<Negocio>(BuildModel());
+        var propiedad = entidad.FindProperty(nameof(Negocio.Domicilio))!;
+
+        Assert.True(propiedad.IsNullable);
+        Assert.Equal(typeof(string), propiedad.ClrType);
+    }
+
+    [Fact]
     public void Corte_tiene_indice_unico_por_NegocioId()
     {
         var entidad = GetEntity<Corte>(BuildModel());

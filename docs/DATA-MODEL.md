@@ -26,6 +26,7 @@ The client business. In a single-tenant deployment there is exactly one row, and
 | `Id` | `int` PK | |
 | `Nombre` | `text` | |
 | `Cuit` | `text?` | |
+| `Domicilio` | `text?` | The legal address. Nullable — not every business has it loaded yet. Exists because the approved `DatosPersonales` consent text names the data controller's address (FUNCTIONAL-SPEC §7, decided 2026-08-19): the wording is a fixed template in code, the identifying data is read from this row, never a business literal |
 | `Activo` | `bool` | |
 | `CreadoEn` | `timestamptz` | |
 

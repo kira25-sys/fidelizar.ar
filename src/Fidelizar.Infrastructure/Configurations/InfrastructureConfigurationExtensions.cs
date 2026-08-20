@@ -1,3 +1,4 @@
+using Fidelizar.Domain.Persistence;
 using Fidelizar.Domain.Repositories;
 using Fidelizar.Domain.Security;
 using Fidelizar.Infrastructure.Import;
@@ -40,6 +41,7 @@ public static class InfrastructureConfigurationExtensions
         services.AddScoped<INegocioRepository, NegocioRepository>();
         services.AddScoped<IConsentimientoRepository, ConsentimientoRepository>();
         services.AddScoped<ISucursalRepository, SucursalRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         // ARCHITECTURE §3: Application depends on IPasswordHasher only, never on ASP.NET Core
         // Identity directly — this is the one place that wires the real implementation in.

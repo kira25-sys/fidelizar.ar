@@ -1,0 +1,117 @@
+.ficha-completa__mensaje-titulo {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.ficha-completa__mensaje-cuerpo {
+  margin: var(--space-3) 0 var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.ficha-completa__encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ficha-completa__encabezado h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.ficha-completa__subtitulo {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.ficha-completa__aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.ficha-completa__datos {
+  margin: var(--space-5) 0 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* Density is the back office's budget (DESIGN-SYSTEM §1): once there is room, the fields sit
+   two across instead of running down a 1200px column one line at a time. Nothing is hidden at
+   narrow — the same fields, in the same order, stacked (§10.1). */
+@media (min-width: 640px) {
+  .ficha-completa__datos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-6);
+  }
+}
+
+.ficha-completa__dato dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.ficha-completa__dato dd {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.ficha-completa__nota {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.ficha-completa__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+/* .btn is written for <button>; an <a> carrying it needs the link defaults neutralised so the
+   two look identical side by side. */
+.ficha-completa__acciones a.btn,
+.ficha-completa__boton {
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.ficha-completa__volver {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-size-comfortable);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+
+/* Hover is guarded so it does not stick after a tap (DESIGN-SYSTEM §8.1). */
+@media (hover: hover) and (pointer: fine) {
+  .ficha-completa__volver:hover {
+    text-decoration: underline;
+  }
+}
+
+@media (max-width: 639px) {
+  .ficha-completa__acciones a.btn {
+    width: 100%;
+  }
+}

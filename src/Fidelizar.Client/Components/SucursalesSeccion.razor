@@ -1,0 +1,190 @@
+@* S10 · Sucursales (FUNCTIONAL-SPEC §3, Dueño only): the branch list and the form that adds one.
+   A child of Pages/Administracion.razor, which owns the data and the Dueño-only shell; this
+   component only renders it and posts new rows back up. *@
+@using System.ComponentModel.DataAnnotations
+@using Fidelizar.Client.Api
+@using Fidelizar.Shared.Sucursales
+@inject IApiClient ApiClient
+
+<section class="card seccion" aria-labelledby="titulo-sucursales">
+    <h2 id="titulo-sucursales">Sucursales</h2>
+    <p class="seccion__ayuda">
+        El código externo es el que trae el archivo de ventas. Una importación con un código que
+        no figure acá se rechaza entera, así que conviene cargarlo tal cual lo emite el sistema
+        de la caja.
+    </p>
+
+    @if (Sucursales.Count == 0)
+    {
+        <p class="seccion__vacio">Todavía no hay sucursales cargadas. Creá la primera acá abajo.</p>
+    }
+    else
+    {
+        @* Roles are spelled out because the narrow layout switches these elements to
+           display:block, which drops their implicit table semantics (DESIGN-SYSTEM §10.1:
+           the row stacks, it never scrolls sideways). *@
+        <table class="tabla" role="table" aria-labelledby="titulo-sucursales">
+            <thead role="rowgroup">
+                <tr role="row">
+                    <th role="columnheader" scope="col">Nombre</th>
+                    <th role="columnheader" scope="col">Código externo</th>
+                    <th role="columnheader" scope="col">Estado</th>
+                </tr>
+            </thead>
+            <tbody role="rowgroup">
+                @foreach (var sucursal in Sucursales)
+                {
+                    <tr role="row">
+                        <td role="cell" data-etiqueta="Nombre">@sucursal.Nombre</td>
+                        <td role="cell" data-etiqueta="Código externo">
+                            @if (string.IsNullOrWhiteSpace(sucursal.CodigoExterno))
+                            {
+                                <span class="tabla__vacio">Sin código</span>
+                            }
+                            else
+                            {
+                                @sucursal.CodigoExterno
+                            }
+                        </td>
+                        <td role="cell" data-etiqueta="Estado">
+                            <span class="badge @(sucursal.Activa ? "badge--success" : "badge--neutral")">
+                                @(sucursal.Activa ? "Activa" : "Inactiva")
+                            </span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h3 id="titulo-nueva-sucursal">Nueva sucursal</h3>
+
+    <ErrorNotice Problem="_problem" />
+
+    <p class="seccion__confirmacion" role="status" aria-live="polite">@_confirmacion</p>
+
+    <form
+        class="form-column formulario"
+        novalidate
+        aria-labelledby="titulo-nueva-sucursal"
+        @onsubmit="CrearAsync"
+        @onsubmit:preventDefault="true">
+        <div class="field">
+            <label for="sucursal-nombre">Nombre</label>
+            <input
+                id="sucursal-nombre"
+                class="input"
+                type="text"
+                autocomplete="off"
+                @bind="_nombre"
+                @bind:event="oninput"
+                @ref="_nombreInput"
+                aria-invalid="@(_errorNombre is null ? "false" : "true")"
+                aria-describedby="sucursal-nombre-error" />
+            @if (_errorNombre is not null)
+            {
+                <span id="sucursal-nombre-error" class="field-error">@_errorNombre</span>
+            }
+        </div>
+
+        <div class="field">
+            <label for="sucursal-codigo">Código externo <span class="field__opcional">(opcional)</span></label>
+            <input
+                id="sucursal-codigo"
+                class="input"
+                type="text"
+                autocomplete="off"
+                @bind="_codigoExterno"
+                @bind:event="oninput" />
+        </div>
+
+        @* disabled, not only aria-busy: pointer-events blocks a second click and not a second
+           Enter (DESIGN-SYSTEM §9.5). *@
+        <button
+            type="submit"
+            class="btn btn--primary"
+            disabled="@_enviando"
+            aria-busy="@(_enviando ? "true" : "false")">
+            Crear sucursal
+        </button>
+    </form>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<SucursalResponse> Sucursales { get; set; } = [];
+
+    /// <summary>The page owns the list; this hands it the row the server just created.</summary>
+    [Parameter] public EventCallback<SucursalResponse> OnSucursalCreada { get; set; }
+
+    private string _nombre = string.Empty;
+    private string _codigoExterno = string.Empty;
+    private bool _enviando;
+    private ApiProblem? _problem;
+    private string? _errorNombre;
+    private string? _confirmacion;
+    private ElementReference _nombreInput;
+
+    private async Task CrearAsync()
+    {
+        if (_enviando)
+        {
+            return;
+        }
+
+        var codigo = string.IsNullOrWhiteSpace(_codigoExterno) ? null : _codigoExterno.Trim();
+        var request = new CrearSucursalRequest(_nombre.Trim(), codigo);
+
+        if (!await ValidarAsync(request))
+        {
+            return;
+        }
+
+        _enviando = true;
+        _problem = null;
+        _confirmacion = null;
+        StateHasChanged();
+
+        var resultado = await ApiClient.PostAsync<CrearSucursalRequest, SucursalResponse>("api/sucursales", request);
+
+        _enviando = false;
+
+        if (!resultado.Success)
+        {
+            // The form keeps what was typed: a request that fails mid-flow must not lose it
+            // (ARCHITECTURE §14).
+            _problem = resultado.Problem;
+            StateHasChanged();
+            return;
+        }
+
+        _nombre = string.Empty;
+        _codigoExterno = string.Empty;
+        _confirmacion = $"Sucursal «{resultado.Value.Nombre}» creada.";
+        await OnSucursalCreada.InvokeAsync(resultado.Value);
+        await _nombreInput.FocusAsync();
+    }
+
+    /// <summary>
+    /// Reuses CrearSucursalRequest's own DataAnnotations (Fidelizar.Shared) so the Spanish message
+    /// is not a second copy of the server's. The server still decides — this only saves a round
+    /// trip (ARCHITECTURE §14).
+    /// </summary>
+    private async Task<bool> ValidarAsync(CrearSucursalRequest request)
+    {
+        var resultados = new List<ValidationResult>();
+        Validator.TryValidateObject(request, new ValidationContext(request), resultados, validateAllProperties: true);
+
+        _errorNombre = resultados
+            .FirstOrDefault(r => r.MemberNames.Contains(nameof(CrearSucursalRequest.Nombre)))?
+            .ErrorMessage;
+
+        if (_errorNombre is null)
+        {
+            return true;
+        }
+
+        StateHasChanged();
+        await _nombreInput.FocusAsync();
+        return false;
+    }
+}

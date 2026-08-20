@@ -1,0 +1,358 @@
+@* S10 · Usuarios (FUNCTIONAL-SPEC §3, Dueño only): the staff accounts and the form that adds
+   one, with the role and branch each account gets. A child of Pages/Administracion.razor, which
+   owns the data and the Dueño-only shell. These are staff accounts, not members — §4's "never a
+   phone or a DNI" rule is about the counter screen and the people it serves; the email here is
+   the login identifier the owner just typed. *@
+@using System.ComponentModel.DataAnnotations
+@using Fidelizar.Client.Api
+@using Fidelizar.Client.Auth
+@using Fidelizar.Shared.Sucursales
+@using Fidelizar.Shared.Usuarios
+@inject IApiClient ApiClient
+
+<section class="card seccion" aria-labelledby="titulo-usuarios">
+    <h2 id="titulo-usuarios">Usuarios</h2>
+    <p class="seccion__ayuda">
+        Cada movimiento queda firmado con el usuario que lo registró, así que cada persona del
+        local necesita el suyo. Un cajero y una encargada trabajan en una sucursal; un dueño y un
+        soporte, en todas.
+    </p>
+
+    @if (Usuarios.Count == 0)
+    {
+        <p class="seccion__vacio">Todavía no hay usuarios cargados.</p>
+    }
+    else
+    {
+        @* Roles are spelled out because the narrow layout switches these elements to
+           display:block, which drops their implicit table semantics (DESIGN-SYSTEM §10.1). *@
+        <table class="tabla" role="table" aria-labelledby="titulo-usuarios">
+            <thead role="rowgroup">
+                <tr role="row">
+                    <th role="columnheader" scope="col">Nombre</th>
+                    <th role="columnheader" scope="col">Email</th>
+                    <th role="columnheader" scope="col">Rol</th>
+                    <th role="columnheader" scope="col">Sucursal</th>
+                    <th role="columnheader" scope="col">Estado</th>
+                </tr>
+            </thead>
+            <tbody role="rowgroup">
+                @foreach (var usuario in Usuarios)
+                {
+                    <tr role="row">
+                        <td role="cell" data-etiqueta="Nombre">@usuario.NombreCompleto</td>
+                        <td role="cell" data-etiqueta="Email">@usuario.Email</td>
+                        <td role="cell" data-etiqueta="Rol">@Roles.Etiqueta(usuario.Rol)</td>
+                        <td role="cell" data-etiqueta="Sucursal">@NombreDeSucursal(usuario.SucursalId)</td>
+                        <td role="cell" data-etiqueta="Estado">
+                            <span class="badge @(usuario.Activo ? "badge--success" : "badge--neutral")">
+                                @(usuario.Activo ? "Activo" : "Inactivo")
+                            </span>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <h3 id="titulo-nuevo-usuario">Nuevo usuario</h3>
+
+    <ErrorNotice Problem="_problem" />
+
+    <p class="seccion__confirmacion" role="status" aria-live="polite">@_confirmacion</p>
+
+    <form
+        class="form-column formulario"
+        novalidate
+        aria-labelledby="titulo-nuevo-usuario"
+        @onsubmit="CrearAsync"
+        @onsubmit:preventDefault="true">
+        <div class="field">
+            <label for="usuario-nombre">Nombre y apellido</label>
+            <input
+                id="usuario-nombre"
+                class="input"
+                type="text"
+                autocomplete="off"
+                @bind="_nombreCompleto"
+                @bind:event="oninput"
+                @ref="_nombreInput"
+                aria-invalid="@EsInvalido(nameof(CrearUsuarioRequest.NombreCompleto))"
+                aria-describedby="usuario-nombre-error" />
+            @if (_erroresDeCampo.TryGetValue(nameof(CrearUsuarioRequest.NombreCompleto), out var errorNombre))
+            {
+                <span id="usuario-nombre-error" class="field-error">@errorNombre</span>
+            }
+        </div>
+
+        <div class="field">
+            <label for="usuario-email">Email</label>
+            <input
+                id="usuario-email"
+                class="input"
+                type="email"
+                autocomplete="off"
+                @bind="_email"
+                @bind:event="oninput"
+                @ref="_emailInput"
+                aria-invalid="@EsInvalido(nameof(CrearUsuarioRequest.Email))"
+                aria-describedby="usuario-email-error" />
+            @if (_erroresDeCampo.TryGetValue(nameof(CrearUsuarioRequest.Email), out var errorEmail))
+            {
+                <span id="usuario-email-error" class="field-error">@errorEmail</span>
+            }
+        </div>
+
+        <div class="field">
+            <label for="usuario-password">Contraseña inicial</label>
+            @* autocomplete="new-password" keeps the browser from filling in the owner's own
+               credentials, and the value is dropped from component state the moment the account
+               exists — it is never logged, cached or put in a URL. *@
+            <input
+                id="usuario-password"
+                class="input"
+                type="password"
+                autocomplete="new-password"
+                @bind="_password"
+                @bind:event="oninput"
+                @ref="_passwordInput"
+                aria-invalid="@EsInvalido(nameof(CrearUsuarioRequest.Password))"
+                aria-describedby="usuario-password-ayuda usuario-password-error" />
+            <span id="usuario-password-ayuda" class="field__ayuda">
+                Se la das en mano a la persona. Ella la usa para ingresar al principio del turno.
+            </span>
+            @if (_erroresDeCampo.TryGetValue(nameof(CrearUsuarioRequest.Password), out var errorPassword))
+            {
+                <span id="usuario-password-error" class="field-error">@errorPassword</span>
+            }
+        </div>
+
+        <div class="field">
+            <label for="usuario-rol">Rol</label>
+            <select
+                id="usuario-rol"
+                class="input"
+                value="@_rol"
+                @onchange="CambiarRol"
+                @ref="_rolInput"
+                aria-invalid="@EsInvalido(nameof(CrearUsuarioRequest.Rol))"
+                aria-describedby="usuario-rol-error">
+                <option value="">Elegí un rol…</option>
+                @foreach (var rol in Roles.Asignables)
+                {
+                    <option value="@rol">@Roles.Etiqueta(rol)</option>
+                }
+            </select>
+            @if (_erroresDeCampo.TryGetValue(nameof(CrearUsuarioRequest.Rol), out var errorRol))
+            {
+                <span id="usuario-rol-error" class="field-error">@errorRol</span>
+            }
+        </div>
+
+        @* Shown only for the roles that take a branch (DATA-MODEL §2) — the field is not
+           disabled-and-visible for a Dueño, it is absent, because for a Dueño there is nothing
+           to choose and a greyed select invites the question of why. *@
+        @if (Roles.RequiereSucursal(_rol))
+        {
+            <div class="field">
+                <label for="usuario-sucursal">Sucursal</label>
+                @if (Sucursales.Count == 0)
+                {
+                    <p class="field__ayuda">
+                        Todavía no hay sucursales. Creá una arriba antes de dar de alta a alguien
+                        que trabaja en el local.
+                    </p>
+                }
+                else
+                {
+                    <select
+                        id="usuario-sucursal"
+                        class="input"
+                        value="@_sucursalId"
+                        @onchange="CambiarSucursal"
+                        @ref="_sucursalInput"
+                        aria-invalid="@EsInvalido(nameof(CrearUsuarioRequest.SucursalId))"
+                        aria-describedby="usuario-sucursal-error">
+                        <option value="">Elegí una sucursal…</option>
+                        @foreach (var sucursal in Sucursales)
+                        {
+                            <option value="@sucursal.Id">@sucursal.Nombre</option>
+                        }
+                    </select>
+                }
+                @if (_erroresDeCampo.TryGetValue(nameof(CrearUsuarioRequest.SucursalId), out var errorSucursal))
+                {
+                    <span id="usuario-sucursal-error" class="field-error">@errorSucursal</span>
+                }
+            </div>
+        }
+
+        @* disabled, not only aria-busy: pointer-events blocks a second click and not a second
+           Enter (DESIGN-SYSTEM §9.5). *@
+        <button
+            type="submit"
+            class="btn btn--primary"
+            disabled="@_enviando"
+            aria-busy="@(_enviando ? "true" : "false")">
+            Crear usuario
+        </button>
+    </form>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<UsuarioResponse> Usuarios { get; set; } = [];
+
+    [Parameter, EditorRequired] public IReadOnlyList<SucursalResponse> Sucursales { get; set; } = [];
+
+    /// <summary>The page owns the list; this hands it the row the server just created.</summary>
+    [Parameter] public EventCallback<UsuarioResponse> OnUsuarioCreado { get; set; }
+
+    private string _nombreCompleto = string.Empty;
+    private string _email = string.Empty;
+    private string _password = string.Empty;
+    private string _rol = string.Empty;
+    private string _sucursalId = string.Empty;
+    private bool _enviando;
+    private ApiProblem? _problem;
+    private string? _confirmacion;
+    private readonly Dictionary<string, string> _erroresDeCampo = new();
+    private ElementReference _nombreInput;
+    private ElementReference _emailInput;
+    private ElementReference _passwordInput;
+    private ElementReference _rolInput;
+    private ElementReference _sucursalInput;
+
+    private string NombreDeSucursal(int? sucursalId)
+    {
+        if (sucursalId is null)
+        {
+            return "Todas";
+        }
+
+        return Sucursales.FirstOrDefault(s => s.Id == sucursalId)?.Nombre ?? $"Sucursal {sucursalId}";
+    }
+
+    private string EsInvalido(string campo) => _erroresDeCampo.ContainsKey(campo) ? "true" : "false";
+
+    private void CambiarRol(ChangeEventArgs args)
+    {
+        _rol = args.Value?.ToString() ?? string.Empty;
+
+        // A Dueño or a Soporte with a branch is rejected by Usuario.Crear as SUCURSAL_NO_APLICA
+        // (DATA-MODEL §2). Clearing on the way out means a branch picked for a Cajero cannot ride
+        // along after the role is changed to one that takes none.
+        if (!Roles.RequiereSucursal(_rol))
+        {
+            _sucursalId = string.Empty;
+        }
+    }
+
+    private void CambiarSucursal(ChangeEventArgs args) => _sucursalId = args.Value?.ToString() ?? string.Empty;
+
+    private async Task CrearAsync()
+    {
+        if (_enviando)
+        {
+            return;
+        }
+
+        int? sucursalId = int.TryParse(_sucursalId, out var parsed) ? parsed : null;
+        var request = new CrearUsuarioRequest(
+            _nombreCompleto.Trim(), _email.Trim(), _password, _rol, sucursalId);
+
+        if (!await ValidarAsync(request))
+        {
+            return;
+        }
+
+        _enviando = true;
+        _problem = null;
+        _confirmacion = null;
+        StateHasChanged();
+
+        var resultado = await ApiClient.PostAsync<CrearUsuarioRequest, UsuarioResponse>("api/usuarios", request);
+
+        _enviando = false;
+
+        if (!resultado.Success)
+        {
+            // The form keeps what was typed — a duplicate email must not cost the whole form
+            // (ARCHITECTURE §14).
+            _problem = resultado.Problem;
+            StateHasChanged();
+            return;
+        }
+
+        _nombreCompleto = string.Empty;
+        _email = string.Empty;
+        _password = string.Empty; // the account exists now; nothing here needs the password again
+        _rol = string.Empty;
+        _sucursalId = string.Empty;
+        _confirmacion = $"Usuario «{resultado.Value.NombreCompleto}» creado.";
+        await OnUsuarioCreado.InvokeAsync(resultado.Value);
+        await _nombreInput.FocusAsync();
+    }
+
+    /// <summary>
+    /// Reuses CrearUsuarioRequest's own DataAnnotations (Fidelizar.Shared) so the Spanish message
+    /// is not a second copy of the server's, plus the one rule the DTO cannot express: the branch
+    /// is required for a Cajero and an Encargada, and forbidden for the rest (DATA-MODEL §2). The
+    /// server enforces all of it either way — this only saves a round trip (ARCHITECTURE §14).
+    /// </summary>
+    private async Task<bool> ValidarAsync(CrearUsuarioRequest request)
+    {
+        _erroresDeCampo.Clear();
+
+        var resultados = new List<ValidationResult>();
+        Validator.TryValidateObject(request, new ValidationContext(request), resultados, validateAllProperties: true);
+
+        foreach (var resultado in resultados)
+        {
+            foreach (var campo in resultado.MemberNames)
+            {
+                _erroresDeCampo.TryAdd(campo, resultado.ErrorMessage ?? string.Empty);
+            }
+        }
+
+        if (Roles.RequiereSucursal(request.Rol) && request.SucursalId is null)
+        {
+            _erroresDeCampo.TryAdd(
+                nameof(CrearUsuarioRequest.SucursalId),
+                "Elegí la sucursal donde trabaja: los cajeros y las encargadas pertenecen a una.");
+        }
+
+        if (_erroresDeCampo.Count == 0)
+        {
+            return true;
+        }
+
+        StateHasChanged();
+        await EnfocarPrimerErrorAsync();
+        return false;
+    }
+
+    /// <summary>Focus lands on the first field in DOM order that complained (DESIGN-SYSTEM §9.1).</summary>
+    private async Task EnfocarPrimerErrorAsync()
+    {
+        if (_erroresDeCampo.ContainsKey(nameof(CrearUsuarioRequest.NombreCompleto)))
+        {
+            await _nombreInput.FocusAsync();
+        }
+        else if (_erroresDeCampo.ContainsKey(nameof(CrearUsuarioRequest.Email)))
+        {
+            await _emailInput.FocusAsync();
+        }
+        else if (_erroresDeCampo.ContainsKey(nameof(CrearUsuarioRequest.Password)))
+        {
+            await _passwordInput.FocusAsync();
+        }
+        else if (_erroresDeCampo.ContainsKey(nameof(CrearUsuarioRequest.Rol)))
+        {
+            await _rolInput.FocusAsync();
+        }
+        else if (_erroresDeCampo.ContainsKey(nameof(CrearUsuarioRequest.SucursalId)) && Sucursales.Count > 0)
+        {
+            await _sucursalInput.FocusAsync();
+        }
+    }
+}

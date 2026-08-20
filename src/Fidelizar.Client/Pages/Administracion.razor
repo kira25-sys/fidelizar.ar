@@ -1,0 +1,164 @@
+@page "/administracion"
+@using System.Net
+@using Fidelizar.Shared.Sucursales
+@using Fidelizar.Shared.Usuarios
+@implements IDisposable
+@inject IApiClient ApiClient
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
+
+@* S10 Usuarios y sucursales (FUNCTIONAL-SPEC §3 — Dueño only). A back-office screen, used
+   sitting down: density beats speed here, the opposite budget to the counter (§1).
+
+   The Dueño-only rule is the server's: /api/usuarios and /api/sucursales both sit behind the
+   DuenoOnly policy. Nothing below is a permission check — the header link that leads here is
+   hidden from everyone else, and anyone who types the URL anyway gets the server's 403 rendered
+   as a plain Spanish message with no data behind it. Hiding a link is presentation; the policy
+   is the protection (ARCHITECTURE §8). *@
+
+<PageTitle>Usuarios y sucursales — Fidelizar</PageTitle>
+
+@if (SessionService.IsAuthenticated)
+{
+    <div class="page administracion">
+        <h1 tabindex="-1">Usuarios y sucursales</h1>
+        @* The arrow is aria-hidden: a screen reader announcing "left arrow" before the label
+           adds nothing. *@
+        <p class="administracion__volver">
+            <a href="/"><span aria-hidden="true">←</span> Volver a la búsqueda</a>
+        </p>
+
+        @if (_cargando)
+        {
+            <div class="card" role="status" aria-live="polite">
+                <p>Cargando usuarios y sucursales…</p>
+            </div>
+        }
+        else if (_sinPermiso)
+        {
+            @* The server's own 403 message, rendered as-is. It names no user, no branch and no
+               endpoint — there is nothing here for someone who should not be here. *@
+            <div class="card administracion__sin-permiso">
+                <p class="administracion__sin-permiso-titulo">Esta pantalla es solo para el dueño.</p>
+                <p>@_mensajeSinPermiso</p>
+                <a class="btn btn--secondary" href="/">Volver a la búsqueda</a>
+            </div>
+        }
+        else if (_problem is not null)
+        {
+            <ErrorNotice Problem="_problem" OnRetry="CargarAsync" />
+        }
+        else
+        {
+            <SucursalesSeccion Sucursales="_sucursales" OnSucursalCreada="AgregarSucursal" />
+            <UsuariosSeccion Usuarios="_usuarios" Sucursales="_sucursales" OnUsuarioCreado="AgregarUsuario" />
+        }
+    </div>
+}
+
+@code {
+    private readonly List<SucursalResponse> _sucursales = [];
+    private readonly List<UsuarioResponse> _usuarios = [];
+    private bool _cargando = true;
+    private bool _sinPermiso;
+    private string _mensajeSinPermiso = string.Empty;
+    private ApiProblem? _problem;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SessionService.Changed += OnSessionChanged;
+
+        if (!SessionService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/ingreso", replace: true);
+            return;
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        _cts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+
+        _cargando = true;
+        _problem = null;
+        _sinPermiso = false;
+        StateHasChanged();
+
+        // Branches first: the users table resolves each account's branch name from this list, and
+        // the new-user form offers it as the branch options.
+        var sucursales = await ApiClient.GetAsync<List<SucursalResponse>>("api/sucursales", cts.Token);
+        if (cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (!sucursales.Success)
+        {
+            Fallar(sucursales.Problem!);
+            return;
+        }
+
+        var usuarios = await ApiClient.GetAsync<List<UsuarioResponse>>("api/usuarios", cts.Token);
+        if (cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if (!usuarios.Success)
+        {
+            Fallar(usuarios.Problem!);
+            return;
+        }
+
+        _sucursales.Clear();
+        _sucursales.AddRange(sucursales.Value);
+        _usuarios.Clear();
+        _usuarios.AddRange(usuarios.Value);
+        _cargando = false;
+        StateHasChanged();
+    }
+
+    private void Fallar(ApiProblem problem)
+    {
+        _cargando = false;
+
+        // A 403 is not a failure to retry — it is the answer. Everything else (offline, timeout,
+        // a 500) keeps its retry button.
+        if (problem.StatusCode == HttpStatusCode.Forbidden)
+        {
+            _sinPermiso = true;
+            _mensajeSinPermiso = problem.Message;
+        }
+        else
+        {
+            _problem = problem;
+        }
+
+        StateHasChanged();
+    }
+
+    private void AgregarSucursal(SucursalResponse sucursal) => _sucursales.Add(sucursal);
+
+    private void AgregarUsuario(UsuarioResponse usuario) => _usuarios.Add(usuario);
+
+    private void OnSessionChanged()
+    {
+        if (!SessionService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/ingreso", replace: true);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        SessionService.Changed -= OnSessionChanged;
+        _cts?.Cancel();
+    }
+}

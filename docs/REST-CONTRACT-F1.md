@@ -12,9 +12,9 @@ CLAUDE.md says to ask before adding one. A static YAML file needs none.
 **Originally F1-04b implemented only S1, S3's balance piece and S4.**
 `feat/f1-backend-endpoints-pendientes` closed the rest of phase 1's endpoint table — S2, S3's full
 counter view, S6, S7, S8, S9 and S10 — plus the "$0 fantasma" defect `ObtenerSaldo` used to
-document instead of fix. **S5 Alta de socio stays pending on purpose**: it needs to compose
-`Miembro` and `Consentimiento` atomically (I10), and another branch was working on
-`Consentimiento` at the same time — see the note at the end of this document.
+document instead of fix. **S5 Alta de socio stayed pending on purpose** while `feat/f1-08-consentimiento`
+built `Consentimiento` in parallel; `feat/f1-idempotencia-y-alta` closed it 2026-08-19, once both
+consent texts were approved (README open decision #3) — see the note at the end of this document.
 
 ## Endpoint table
 
@@ -28,7 +28,8 @@ document instead of fix. **S5 Alta de socio stays pending on purpose**: it needs
 | S3 Ficha del socio | `/api/miembros/{id}/saldo` | GET | `CajeroOrAbove` | **Implemented** | `ISaldoService` + `ICorteService` |
 | S3 Ficha del socio | `/api/miembros/{id}/ficha-mostrador` | GET | `CajeroOrAbove` | **Implemented** | `IFichaMostradorService` |
 | S4 Registrar canje | `/api/miembros/{id}/canjes` | POST | `CajeroOrAbove` | **Implemented** | `ISaldoService.RegistrarCanjeAsync` |
-| S5 Alta de socio | `/api/miembros` | POST | `CajeroOrAbove` | Pending | member+consent creation use case — blocked on `feat/f1-08-consentimiento` |
+| S5 Alta de socio | `/api/miembros` | POST | `CajeroOrAbove` | **Implemented** | `IAltaMiembroService.DarDeAltaAsync` |
+| S5 Alta de socio | `/api/miembros/consentimiento-texto/{tipo}` | GET | `CajeroOrAbove` | **Implemented** | `IConsentimientoTextoService.ObtenerAsync` |
 | S6 Ficha completa | `/api/miembros/{id}/completo` | GET | `EncargadaOrAbove` | **Implemented** | `IFichaCompletaService` |
 | S7 Historial de movimientos | `/api/miembros/{id}/movimientos` | GET | `EncargadaOrAbove` | **Implemented** | `IHistorialMovimientosService` |
 | S8 Anular movimiento | `/api/movimientos/{id}/anular` | POST | `EncargadaOrAbove` | **Implemented** | `IAnulacionMovimientoService` |
@@ -127,13 +128,42 @@ from the token, never from the URL or the body.
   would leave exactly the race this decision exists to close.
 - **Auth (S1)** — unchanged from F1-03/F1-04b.
 
-## S5 Alta de socio — still pending, deliberately
+## S5 Alta de socio — implemented 2026-08-19
 
-`AltaMiembroRequest`'s shape in the OpenAPI document is unchanged. It needs a use case that
-creates `Miembro` and writes the mandatory `DatosPersonales` `Consentimiento` in the same
-transaction (I10) — `IMiembroRepository.AddAsync` alone does not compose that, and
-`feat/f1-08-consentimiento` was working on the `Consentimiento` entity and service at the same
-time this branch ran. No file under that entity's ownership was touched here.
+- **`MiembrosController.RegistrarAlta`** (`POST /api/miembros`) calls
+  `IAltaMiembroService.DarDeAltaAsync`, which composes what `feat/f1-08-consentimiento` built
+  without duplicating it: `IMiembroRepository.AddAsync` and `IConsentimientoService.OtorgarAsync`,
+  both inside one new `IUnitOfWork.EjecutarEnTransaccionAsync` call (`Fidelizar.Domain.Persistence`,
+  implemented in `Fidelizar.Infrastructure` over a real `DbContext.Database.BeginTransactionAsync`
+  — not the generic repository ARCHITECTURE §3 rejects, since it exposes no entity operations of
+  its own, only a transaction boundary around calls the caller still makes through the normal
+  per-aggregate repositories). If either write fails, neither lands (I10): a member without its
+  recorded consent is exactly the legal hole phase 1 exists to close.
+  `consentimientoDatosPersonales = false` is rejected with `400 CONSENTIMIENTO_DATOS_PERSONALES_REQUERIDO`
+  **before anything is written** — not even the `Miembro`. `consentimientoDatosSensibles` is
+  optional and defaults to writing no row at all when not offered (not the same fact as "declined"),
+  matching the approved text's own claim that membership does not require it. `SucursalId` is
+  validated to exist (`400 SUCURSAL_INEXISTENTE`, same pattern as `UsuarioService`); a supplied
+  `ClienteExternoId` already linked to another member of this business is `409 CLIENTE_EXTERNO_ID_DUPLICADO`.
+  `FechaNacimientoDia`/`Mes` — both or neither, `400 FECHA_NACIMIENTO_INCOMPLETA` otherwise; RN-11
+  ignores the year, so the request never carries one and `AltaMiembroService` manufactures a
+  placeholder (a leap year, so Feb 29 needs no special case).
+- **`MiembrosController.ObtenerConsentimientoTexto`** (`GET /api/miembros/consentimiento-texto/{tipo}`)
+  calls the new `IConsentimientoTextoService.ObtenerAsync`, which resolves
+  `Fidelizar.Domain.Consentimientos.TextosConsentimiento`'s fixed template against the caller's own
+  `Negocio` (`INegocioRepository.ObtenerUnicoAsync`) — the wording is a constant (the product's own
+  legal boilerplate, identical for every business), but the business's name/CUIT/address are never
+  literals: they come from that business's own row, substituted in at render time. This is what S5
+  (F1-09, frontend) shows the member before either checkbox — without it the frontend would have
+  had to hardcode legal text carrying no business's actual identity, or invent one. Only
+  `DatosPersonales` and `DatosSensibles` have an approved text (README open decision #3, resolved
+  2026-08-19); `Comunicaciones` throws `400 TIPO_CONSENTIMIENTO_SIN_TEXTO`. The `NegocioId` comes
+  from the token and is **checked against the row**, not assumed (`409 NEGOCIO_AJENO`): one
+  business per deployment (ARCHITECTURE §5) makes a mismatch a misconfiguration, which is exactly
+  why it fails loudly instead of answering with another business's CUIT and address.
+- `Consentimiento.VersionTexto` stores only the version tag (`TextosConsentimiento.DatosPersonalesVersion`
+  / `.DatosSensiblesVersion`), never the resolved text — the design `feat/f1-08-consentimiento`
+  already established, kept unchanged here.
 
 ## DTOs added to `Fidelizar.Shared`
 
@@ -142,6 +172,8 @@ time this branch ran. No file under that entity's ownership was touched here.
 | `Fidelizar.Shared.Miembros` | `MiembroResumen` | S2 |
 | `Fidelizar.Shared.Miembros` | `FichaMostradorResponse` / `AlertaMiembro` | S3 |
 | `Fidelizar.Shared.Miembros` | `FichaCompletaResponse` | S6 |
+| `Fidelizar.Shared.Miembros` | `AltaMiembroRequest` | S5 |
+| `Fidelizar.Shared.Miembros` | `ConsentimientoTextoResponse` | S5 |
 | `Fidelizar.Shared.Movimientos` | `MovimientoResponse` | S7, S8 |
 | `Fidelizar.Shared.Movimientos` | `AnularMovimientoRequest` | S8 |
 | `Fidelizar.Shared.Sucursales` | `CierreDiarioResponse` / `CierreDiarioMovimiento` | S9 |

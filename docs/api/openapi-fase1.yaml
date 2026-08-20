@@ -131,12 +131,15 @@ paths:
     post:
       tags: [Miembros]
       summary: S5 Alta de socio (FUNCTIONAL-SPEC §7)
-      x-status: pending
-      x-pending-service: >
-        Needs an Application use case that creates the Miembro and, in the same
-        transaction, the mandatory DatosPersonales Consentimiento row (I10) — and the
-        optional DatosSensibles one that gates diet/allergy fields. IMiembroRepository
-        only has AddAsync today; nothing composes it with Consentimiento.
+      x-status: implemented
+      description: >
+        Backed by IAltaMiembroService.DarDeAltaAsync, which writes the Miembro and the mandatory
+        DatosPersonales Consentimiento row in one IUnitOfWork transaction (I10) — if either write
+        fails, neither lands. consentimientoDatosPersonales=false is rejected before anything is
+        written (400 CONSENTIMIENTO_DATOS_PERSONALES_REQUERIDO). consentimientoDatosSensibles is
+        optional: the approved text says explicitly that membership does not require it, so alta
+        succeeds either way. Saldo is always 0 in the response — a brand-new member has no ledger
+        rows yet.
       security: [{ cookieAuth: [] }]
       parameters:
         - $ref: '#/components/parameters/CsrfHeader'
@@ -152,9 +155,58 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/MiembroResumen' }
         "400":
-          $ref: '#/components/responses/BadRequest'
+          description: >
+            NOMBRE_REQUERIDO, CONSENTIMIENTO_DATOS_PERSONALES_REQUERIDO (I10),
+            FECHA_NACIMIENTO_INCOMPLETA (day without month or vice versa) or SUCURSAL_INEXISTENTE.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
         "401":
           $ref: '#/components/responses/Unauthorized'
+        "409":
+          description: CLIENTE_EXTERNO_ID_DUPLICADO — this POS id is already linked to another member.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+  /miembros/consentimiento-texto/{tipo}:
+    get:
+      tags: [Miembros]
+      summary: S5 — the resolved consent wording to show the member before either checkbox
+      x-status: implemented
+      description: >
+        Backed by IConsentimientoTextoService.ObtenerAsync. Resolves TextosConsentimiento's fixed
+        template with the caller's own Negocio (name, CUIT, and — for DatosPersonales — address),
+        never a business literal shipped to the client (CLAUDE.md). Only DatosPersonales and
+        DatosSensibles have an approved text (README open decision #3, resolved 2026-08-19);
+        Comunicaciones has none yet.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - name: tipo
+          in: path
+          required: true
+          schema: { type: string, enum: [DatosPersonales, DatosSensibles] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConsentimientoTextoResponse' }
+        "400":
+          description: TIPO_CONSENTIMIENTO_INVALIDO or TIPO_CONSENTIMIENTO_SIN_TEXTO (e.g. Comunicaciones).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "409":
+          description: >
+            NEGOCIO_AJENO — the token's NegocioId is not the business this database holds. A
+            deployment serves one business (ARCHITECTURE §5), so this is checked rather than
+            assumed: it never answers with another business's CUIT and address.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
 
   # ---------------------------------------------------------------------
   # S3 · Ficha del socio — partially implemented
@@ -676,14 +728,34 @@ components:
       required: [nombre, consentimientoDatosPersonales]
       properties:
         nombre: { type: string }
-        clienteExternoId: { type: string, nullable: true }
+        clienteExternoId: { type: string, nullable: true, description: "409 CLIENTE_EXTERNO_ID_DUPLICADO if already linked to another member." }
         telefono: { type: string, nullable: true }
         dni: { type: string, nullable: true }
-        fechaNacimientoDia: { type: integer, nullable: true }
+        fechaNacimientoDia: { type: integer, nullable: true, description: "Both or neither — RN-11 ignores the year, so there is no year field at all." }
         fechaNacimientoMes: { type: integer, nullable: true }
         sucursalId: { type: integer, nullable: true }
-        consentimientoDatosPersonales: { type: boolean, description: "Must be true — explicit checkbox." }
-        consentimientoDatosSensibles: { type: boolean, description: "Without it, diet/allergy fields are not shown at all (I10)." }
+        consentimientoDatosPersonales:
+          type: boolean
+          description: >
+            Must be true — mandatory (README open decision #3, resolved 2026-08-19: the
+            approved text says alta is not possible without it). Alta is rejected before
+            anything is written when this is false.
+        consentimientoDatosSensibles:
+          type: boolean
+          description: >
+            Optional — the approved text says explicitly that membership does not require it.
+            Alta succeeds either way; only whether a DatosSensibles Consentimiento row is
+            written differs. Revoking it later never touches the member or the ledger.
+
+    ConsentimientoTextoResponse:
+      type: object
+      description: >
+        The resolved wording for one consent type (README open decision #3, resolved
+        2026-08-19) — this business's own name/CUIT/address already substituted in.
+      properties:
+        tipo: { type: string, enum: [DatosPersonales, DatosSensibles] }
+        versionTexto: { type: string, description: "What a Consentimiento row stores when the member accepts." }
+        texto: { type: string }
 
     MovimientoResponse:
       type: object

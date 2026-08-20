@@ -1,0 +1,32 @@
+@* The stale-data badge (ARCHITECTURE §13 R3, FLOW-S2-S5.md §0) — every rendered balance on
+   every screen carries this next to it, no exceptions. Two tiers only, exactly as
+   DESIGN-SYSTEM.md §11.1 fixes them. *@
+@using Fidelizar.Client.Formatting
+
+<span class="badge @(EsVieja ? "badge--warning" : "badge--neutral") corte-badge">
+    <span>@Texto</span>
+    @if (MostrarDetalle)
+    {
+        <span aria-hidden="true">ⓘ</span>
+    }
+</span>
+@if (MostrarDetalle && EsVieja)
+{
+    <p class="corte-badge__detalle">Puede haber compras más recientes todavía sin acreditar.</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public DateOnly CorteFecha { get; set; }
+
+    /// <summary>S2's result row has no room for the extra sentence or the ⓘ glyph
+    /// (FLOW-S2-S5.md §0.2) — S3 and S4 do. False by default so a plain call stays S2-safe.</summary>
+    [Parameter] public bool MostrarDetalle { get; set; }
+
+    private int DiasTranscurridos => DateOnly.FromDateTime(DateTime.Now).DayNumber - CorteFecha.DayNumber;
+
+    private bool EsVieja => DiasTranscurridos > 7;
+
+    private string Texto => EsVieja
+        ? $"Datos de ventas al {FechaFormatter.Corta(CorteFecha)} · hace {DiasTranscurridos} días"
+        : $"Datos de ventas al {FechaFormatter.Corta(CorteFecha)}";
+}

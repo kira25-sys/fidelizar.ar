@@ -194,13 +194,13 @@ Nothing is auto-selected, nothing is hidden, no dialog interrupts to ask "¿cuá
 both rows are just there, exactly like any other result, which is the entire point (I7,
 `FUNCTIONAL-SPEC.md` §4: "it costs nothing extra to build").
 
-**A known gap in `MiembroResumen`** (`openapi-fase1.yaml`): the schema carries `saldo` but not a
-cutoff date, and `FUNCTIONAL-SPEC.md` §4 itself only lists "name, member number, balance" for a
-result row — no date. §0.2 above resolves this in favour of `ARCHITECTURE.md` §13 R3 ("not in any
-screen"), because `CLAUDE.md`'s document-authority order ranks `ARCHITECTURE.md` above
-`FUNCTIONAL-SPEC.md`, and R3's wording leaves no screen exempt. That resolution needs
-`MiembroResumen` to gain a cutoff-date field before `F1-05` can build this row as specified — flagged
-for backend, not something this document can add to the contract itself.
+**A gap in `MiembroResumen` flagged here, since closed**: `FUNCTIONAL-SPEC.md` §4 itself only lists
+"name, member number, balance" for a result row — no date. §0.2 above resolves this in favour of
+`ARCHITECTURE.md` §13 R3 ("not in any screen"), because `CLAUDE.md`'s document-authority order
+ranks `ARCHITECTURE.md` above `FUNCTIONAL-SPEC.md`, and R3's wording leaves no screen exempt.
+`MiembroResumen` now carries `CorteFecha` (`Fidelizar.Shared.Miembros.MiembroResumen`,
+`docs/api/openapi-fase1.yaml`), closed by the same branch that implemented the S2 endpoint —
+`F1-06` builds this row against it directly.
 
 ### 1.5 Other states
 
@@ -578,10 +578,10 @@ has since been settled by the owner: what `Corte.Fecha` actually represents (§0
 
 | # | What | Where | Why it matters |
 | --- | --- | --- | --- |
-| 1 | `MiembroResumen` has no cutoff-date field, but R3's "not in any screen" reading requires one on S2's rows too | `openapi-fase1.yaml`, §1.4 | Needs a schema addition before `F1-05` builds S2 as specified here |
+| 1 | ~~`MiembroResumen` has no cutoff-date field~~ — **closed**: it carries `CorteFecha` since the branch that implemented the S2 endpoint | `openapi-fase1.yaml`, §1.4 | `F1-06` builds S2's row against it directly, nothing left blocking |
 | 2 | Retry after a lost response on S4 submit could double-write a `Canje` — no idempotency mechanism exists in `RegistrarCanjeRequest` today | §3.8 | Money-affecting; needs a backend decision, not a UI one |
 | 3 | Both consent texts | `FUNCTIONAL-SPEC.md` §12 | Already an open decision on record, restated here only because S5 depends on it directly |
 | 4 | Re-authenticating in place (as an overlay) versus a full navigation on a mid-canje `401` | §3.6 point 5 | A recommendation, not a commitment — needs confirmation against how `F1-04c` actually implements session handling |
 
-None of the above were decided by this document. Items 1, 2 and 4 are technical; item 3 is the
-owner's, already on record.
+None of the above were decided by this document. Items 2 and 4 are technical and still open;
+item 3 is the owner's, already on record; item 1 is closed.

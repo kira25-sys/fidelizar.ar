@@ -1,0 +1,9 @@
+.corte-badge {
+  white-space: normal;
+}
+
+.corte-badge__detalle {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

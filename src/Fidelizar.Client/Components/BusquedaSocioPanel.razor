@@ -1,0 +1,333 @@
+@* S2 Buscar socio (FLOW-S2-S5.md §1, FUNCTIONAL-SPEC.md §4) — the search field and its
+   result list. Used standalone at "/" and, once a member is selected, as the sticky
+   .split__aside beside S3 (BuscarSocio.razor decides which). *@
+@using System.Globalization
+@using System.Text
+@using Fidelizar.Client.Api
+@using Fidelizar.Client.Formatting
+@using Fidelizar.Client.Services
+@using Fidelizar.Shared.Miembros
+@inject IApiClient ApiClient
+@inject NavigationManager Navigation
+@inject BusquedaSocioCache Cache
+@implements IDisposable
+
+<div class="busqueda-socio">
+    <div class="busqueda-socio__campo">
+        <input
+            id="campo-busqueda-socio"
+            class="input"
+            type="text"
+            role="combobox"
+            aria-expanded="@(ListboxVisible ? "true" : "false")"
+            aria-controls="lista-resultados-busqueda"
+            aria-autocomplete="list"
+            aria-activedescendant="@ActiveDescendantId"
+            aria-label="Buscar socio"
+            autocomplete="off"
+            placeholder="Nombre del socio…"
+            value="@_query"
+            @oninput="OnInputAsync"
+            @onkeydown="OnKeyDown"
+            @ref="_inputRef" />
+        @if (_buscando)
+        {
+            <span class="busqueda-socio__spinner" role="status" aria-label="Buscando…"></span>
+        }
+    </div>
+
+    @if (_query.Length < LargoMinimo)
+    {
+        <p class="busqueda-socio__ayuda">Escribí al menos 3 letras para buscar.</p>
+    }
+    else if (_errorBusqueda is not null)
+    {
+        <p class="busqueda-socio__ayuda">No pudimos buscar. Revisá la conexión e intentá de nuevo.</p>
+    }
+    else if (_resultados is { Count: 0 })
+    {
+        <p class="busqueda-socio__ayuda">
+            No encontramos a nadie con ese nombre. Probá con otro nombre o con menos letras.
+        </p>
+        <a class="busqueda-socio__alta" href="/socios/nuevo">¿Es un socio nuevo? Dar de alta →</a>
+    }
+    else if (_resultados is { Count: > 0 })
+    {
+        <div id="lista-resultados-busqueda" role="listbox" aria-label="Resultados de la búsqueda" class="busqueda-socio__lista">
+            @for (var i = 0; i < _resultados.Count; i++)
+            {
+                var miembro = _resultados[i];
+                var esActivo = i == _activeIndex;
+                <div
+                    role="option"
+                    id="@OptionId(miembro.Id)"
+                    aria-selected="@(esActivo ? "true" : "false")"
+                    class="list-row"
+                    @onclick="() => AbrirFicha(miembro.Id)">
+                    <div class="busqueda-socio__fila">
+                        <div class="busqueda-socio__linea1">
+                            <span class="busqueda-socio__nombre">@miembro.Nombre</span>
+                            @if (!string.IsNullOrEmpty(miembro.NumeroSocio))
+                            {
+                                <span class="busqueda-socio__numero">N° @miembro.NumeroSocio</span>
+                            }
+                        </div>
+                        <div class="busqueda-socio__linea2">
+                            @if (miembro.Saldo < 0)
+                            {
+                                <span class="badge badge--warning">En revisión</span>
+                            }
+                            else
+                            {
+                                <span class="amount">@MoneyFormatter.Format(miembro.Saldo)</span>
+                            }
+                            <CorteBadge CorteFecha="miembro.CorteFecha" />
+                        </div>
+                        @if (_homonimos.Contains(miembro.Id))
+                        {
+                            <div class="busqueda-socio__linea3">Alta: @FechaFormatter.Corta(miembro.FechaAlta)</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <a class="busqueda-socio__alta busqueda-socio__alta--secundaria" href="/socios/nuevo">
+        + Dar de alta un socio nuevo
+    </a>
+</div>
+
+@code {
+    private const int LargoMinimo = 3;
+    private const int DebounceMs = 300;
+
+    /// <summary>S2's search field is the one autofocus in the whole product
+    /// (DESIGN-SYSTEM.md §9.2, FLOW-S2-S5.md §1.1) — but only at "/", never once a member is
+    /// selected, where this same component renders as the aside and focus must stay on S3's
+    /// heading instead (BuscarSocio.razor sets this).</summary>
+    [Parameter] public bool AutoFocus { get; set; }
+
+    private string _query = string.Empty;
+    private List<MiembroResumen>? _resultados;
+    private HashSet<int> _homonimos = [];
+    private int _activeIndex = -1;
+    private bool _listboxAbierto = true;
+    private bool _buscando;
+    private ApiProblem? _errorBusqueda;
+    private CancellationTokenSource? _debounceCts;
+    private ElementReference _inputRef;
+
+    protected override void OnInitialized()
+    {
+        // Restores the last search across a Narrow/Medium round trip to S3 and back
+        // (FLOW-S2-S5.md §1.6) — no re-typing, no second round trip.
+        if (Cache.Resultados is { } cacheados)
+        {
+            _query = Cache.Query;
+            _resultados = [.. cacheados];
+            RecalcularHomonimos();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && AutoFocus)
+        {
+            await _inputRef.FocusAsync();
+        }
+    }
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? string.Empty;
+        _listboxAbierto = true;
+        _activeIndex = -1;
+        _errorBusqueda = null;
+
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = null;
+
+        if (_query.Length < LargoMinimo)
+        {
+            _resultados = null;
+            _buscando = false;
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _debounceCts = cts;
+
+        try
+        {
+            await Task.Delay(DebounceMs, cts.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return; // superseded by a newer keystroke before the debounce even elapsed
+        }
+
+        await EjecutarBusquedaAsync(_query, cts);
+    }
+
+    private async Task EjecutarBusquedaAsync(string query, CancellationTokenSource cts)
+    {
+        // Spinner only once the request is actually in flight, not during the debounce wait
+        // (FLOW-S2-S5.md §1.2) — and the previous list stays on screen while it loads
+        // (nothing below this line touches _resultados until the call settles).
+        _buscando = true;
+        StateHasChanged();
+
+        ApiResult<List<MiembroResumen>> resultado;
+        try
+        {
+            resultado = await ApiClient.GetAsync<List<MiembroResumen>>(
+                $"api/miembros?q={Uri.EscapeDataString(query)}", cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // superseded — a newer search is already running
+        }
+
+        if (cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _buscando = false;
+
+        if (resultado.Success)
+        {
+            _resultados = resultado.Value;
+            _errorBusqueda = null;
+            RecalcularHomonimos();
+            Cache.Set(query, _resultados);
+        }
+        else
+        {
+            // The last successful list is never kept on screen once an error is shown
+            // (FLOW-S2-S5.md §1.5) — a stale list presented as current is worse than a blank.
+            _resultados = null;
+            _homonimos = [];
+            _errorBusqueda = resultado.Problem;
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>Presentation-only grouping to spot exact-name homonyms (FLOW-S2-S5.md §1.4):
+    /// "identical after the same normalisation the search already applies". Client cannot
+    /// reference the server's own NombreNormalizado/VipNombres (ARCHITECTURE §3, Client → Shared
+    /// only), so this is a local, minimal equivalent — accent- and case-folding only, used
+    /// purely to decide whether to render one extra disambiguation line. It changes no data and
+    /// backs no decision the server does not already make independently.</summary>
+    private static string NormalizarParaComparar(string nombre)
+    {
+        var descompuesto = nombre.Normalize(NormalizationForm.FormD);
+        var sinDiacriticos = new string(descompuesto
+            .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            .ToArray());
+        return string.Join(' ', sinDiacriticos.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private void RecalcularHomonimos()
+    {
+        _homonimos = _resultados is null
+            ? []
+            : _resultados
+                .GroupBy(m => NormalizarParaComparar(m.Nombre))
+                .Where(g => g.Count() > 1)
+                .SelectMany(g => g)
+                .Select(m => m.Id)
+                .ToHashSet();
+    }
+
+    private bool ListboxVisible => _listboxAbierto && _resultados is { Count: > 0 };
+
+    private string? ActiveDescendantId =>
+        ListboxVisible && _activeIndex >= 0 && _resultados is not null && _activeIndex < _resultados.Count
+            ? OptionId(_resultados[_activeIndex].Id)
+            : null;
+
+    private static string OptionId(int miembroId) => $"opcion-socio-{miembroId}";
+
+    /// <summary>The ARIA combobox contract (DESIGN-SYSTEM.md §9.3) — no key here ever needs
+    /// preventDefault: this is a plain, form-less text input, so none of ArrowUp/Down, Home/End,
+    /// Enter or Escape triggers a browser default action worth suppressing (Home/End moving the
+    /// caret is the only one, and it is harmless alongside the listbox's own navigation).</summary>
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                MoverActivo(1);
+                break;
+            case "ArrowUp":
+                MoverActivo(-1);
+                break;
+            case "Home":
+                if (_resultados is { Count: > 0 })
+                {
+                    _listboxAbierto = true;
+                    _activeIndex = 0;
+                }
+                break;
+            case "End":
+                if (_resultados is { Count: > 0 })
+                {
+                    _listboxAbierto = true;
+                    _activeIndex = _resultados.Count - 1;
+                }
+                break;
+            case "Enter":
+                if (ListboxVisible && _activeIndex >= 0 && _resultados is not null && _activeIndex < _resultados.Count)
+                {
+                    AbrirFicha(_resultados[_activeIndex].Id);
+                }
+                return;
+            case "Escape":
+                if (_listboxAbierto)
+                {
+                    _listboxAbierto = false;
+                    _activeIndex = -1;
+                }
+                else
+                {
+                    LimpiarCampo();
+                }
+                break;
+            default:
+                return;
+        }
+
+        StateHasChanged();
+    }
+
+    private void MoverActivo(int delta)
+    {
+        if (_resultados is not { Count: > 0 })
+        {
+            return;
+        }
+
+        _listboxAbierto = true;
+        _activeIndex = _activeIndex == -1
+            ? (delta > 0 ? 0 : _resultados.Count - 1)
+            : Math.Clamp(_activeIndex + delta, 0, _resultados.Count - 1);
+    }
+
+    private void LimpiarCampo()
+    {
+        _query = string.Empty;
+        _resultados = null;
+        _homonimos = [];
+        _activeIndex = -1;
+        _errorBusqueda = null;
+        _debounceCts?.Cancel();
+    }
+
+    private void AbrirFicha(int miembroId) => Navigation.NavigateTo($"/socios/{miembroId}");
+
+    public void Dispose() => _debounceCts?.Cancel();
+}

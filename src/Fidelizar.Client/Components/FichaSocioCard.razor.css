@@ -71,6 +71,32 @@
   letter-spacing: 0.02em;
 }
 
+.ficha-socio__back-office {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.ficha-socio__back-office a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-size-comfortable);
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+
+/* Hover is guarded so it does not stick after a tap (DESIGN-SYSTEM §8.1). */
+@media (hover: hover) and (pointer: fine) {
+  .ficha-socio__back-office a:hover {
+    text-decoration: underline;
+  }
+}
+
 @media (max-width: 639px) {
   .ficha-socio__boton-canje {
     width: 100%;

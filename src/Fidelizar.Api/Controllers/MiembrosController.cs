@@ -1,5 +1,7 @@
 using Fidelizar.Api.Security;
 using Fidelizar.Application.Services;
+using Fidelizar.Domain.Entities;
+using Fidelizar.Domain.Exceptions;
 using Fidelizar.Shared.Miembros;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -31,7 +33,9 @@ public sealed class MiembrosController(
     IMiembroBusquedaService busquedaService,
     IFichaMostradorService fichaMostradorService,
     IFichaCompletaService fichaCompletaService,
-    IHistorialMovimientosService historialMovimientosService) : ControllerBase
+    IHistorialMovimientosService historialMovimientosService,
+    IAltaMiembroService altaMiembroService,
+    IConsentimientoTextoService consentimientoTextoService) : ControllerBase
 {
     /// <summary>
     /// S3 Ficha del socio, the balance piece (FUNCTIONAL-SPEC §5). <see cref="ISaldoService.ObtenerSaldoAsync"/>
@@ -156,9 +160,69 @@ public sealed class MiembrosController(
 
         var movimiento = await saldoService.RegistrarCanjeAsync(
             new RegistrarCanjeRequest(
-                negocioId, miembroId, request.Monto, request.Motivo, usuarioId, request.FechaEfectiva, hoy),
+                negocioId, miembroId, request.Monto, request.Motivo, usuarioId, request.FechaEfectiva, hoy,
+                request.ClaveIdempotencia),
             cancellationToken);
 
         return Ok(new CanjeResponse(movimiento.Id, -movimiento.Monto, movimiento.FechaEfectiva, movimiento.SaldoResultante));
+    }
+
+    /// <summary>
+    /// S5 Alta de socio (FUNCTIONAL-SPEC §7). <see cref="IAltaMiembroService.DarDeAltaAsync"/>
+    /// writes the <c>Miembro</c> and the mandatory <c>DatosPersonales</c> <c>Consentimiento</c> in
+    /// one transaction (I10) — if either fails, neither lands. <c>Saldo</c> is always 0 here: a
+    /// brand-new member has no ledger rows yet, so there is nothing for
+    /// <see cref="ISaldoService"/> to sum.
+    /// </summary>
+    [HttpPost]
+    [AntiforgeryTokenRequired]
+    public async Task<IActionResult> RegistrarAlta(
+        [FromBody] AltaMiembroRequest request, CancellationToken cancellationToken)
+    {
+        var negocioId = User.ObtenerNegocioId();
+        var usuarioId = User.ObtenerUsuarioId();
+        var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var miembro = await altaMiembroService.DarDeAltaAsync(
+            new AltaMiembroSolicitud(
+                negocioId,
+                request.Nombre,
+                request.ClienteExternoId,
+                request.Telefono,
+                request.Dni,
+                request.FechaNacimientoDia,
+                request.FechaNacimientoMes,
+                request.SucursalId,
+                request.ConsentimientoDatosPersonales,
+                request.ConsentimientoDatosSensibles,
+                usuarioId,
+                hoy),
+            cancellationToken);
+
+        var corte = await corteService.ObtenerCorteVigenteAsync(negocioId, cancellationToken);
+        var respuesta = new MiembroResumen(miembro.Id, miembro.Nombre, miembro.NumeroSocio, Saldo: 0m, miembro.FechaAlta, corte.Fecha);
+
+        return CreatedAtAction(nameof(FichaMostrador), new { miembroId = miembro.Id }, respuesta);
+    }
+
+    /// <summary>
+    /// The resolved consent wording S5 shows the member before either checkbox — this business's
+    /// own name/CUIT/(domicilio) already substituted in
+    /// (<see cref="Fidelizar.Domain.Consentimientos.TextosConsentimiento"/>), never a literal
+    /// shipped to the browser. Only <c>DatosPersonales</c> and <c>DatosSensibles</c> have an
+    /// approved text (README open decision #3, resolved 2026-08-19).
+    /// </summary>
+    [HttpGet("consentimiento-texto/{tipo}")]
+    public async Task<IActionResult> ObtenerConsentimientoTexto(string tipo, CancellationToken cancellationToken)
+    {
+        if (!Enum.TryParse<TipoConsentimiento>(tipo, ignoreCase: true, out var tipoParseado))
+        {
+            throw new ValidationException($"Tipo de consentimiento inválido: '{tipo}'.", "TIPO_CONSENTIMIENTO_INVALIDO");
+        }
+
+        var resultado = await consentimientoTextoService.ObtenerAsync(
+            User.ObtenerNegocioId(), tipoParseado, cancellationToken);
+
+        return Ok(new ConsentimientoTextoResponse(resultado.Tipo.ToString(), resultado.VersionTexto, resultado.Texto));
     }
 }

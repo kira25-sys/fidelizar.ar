@@ -16,6 +16,8 @@ public sealed class NegocioConfiguration : IEntityTypeConfiguration<Negocio>
 
         builder.Property(n => n.Cuit);
 
+        builder.Property(n => n.Domicilio);
+
         builder.Property(n => n.Activo).IsRequired();
 
         builder.Property(n => n.CreadoEn)

@@ -1,0 +1,213 @@
+/* S10. Every value comes from tokens.css (DESIGN-SYSTEM §14) — no literal colour or size here.
+   The two sections are S10-only children with no stylesheet of their own, so their chrome lives
+   in this file behind ::deep rather than being copied into two files that must then agree. */
+
+.administracion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* tokens.css leaves headings at the browser default; DESIGN-SYSTEM §5 puts a screen title at
+   --text-xl. Set here, scoped to this page, rather than globally on h1 — a global heading rule
+   belongs to the design system, not to S10. */
+.administracion h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.administracion__volver {
+  margin: 0;
+}
+
+.administracion__volver a {
+  color: var(--color-primary);
+}
+
+.administracion__sin-permiso {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.administracion__sin-permiso p.administracion__sin-permiso-titulo {
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+}
+
+.administracion__sin-permiso p {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+/* .btn does not clear an anchor's underline — it was written for <button>. */
+.administracion__sin-permiso .btn {
+  text-decoration: none;
+}
+
+/* ---------- Sections ---------- */
+
+.administracion ::deep .seccion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.administracion ::deep .seccion h2 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+/* The form heading sits under the table inside the same card — bold at body size, so it reads
+   as a subdivision of the section and not as a competing screen title. */
+.administracion ::deep .seccion h3 {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-bold);
+}
+
+.administracion ::deep .seccion__ayuda {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.administracion ::deep .seccion__vacio {
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+}
+
+.administracion ::deep .seccion__confirmacion:not(:empty) {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-success-bg);
+  border-radius: var(--radius-md);
+  color: var(--color-success);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Clipped, never display:none — a live region has to already be in the accessibility tree when
+   the text arrives, or the screen reader has nothing to announce into. */
+.administracion ::deep .seccion__confirmacion:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* ---------- Tables (wide) ----------
+   Density is the back office's budget (DESIGN-SYSTEM §1, §10.2). */
+
+.administracion ::deep .tabla {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.administracion ::deep .tabla th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+}
+
+.administracion ::deep .tabla td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.administracion ::deep .tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.administracion ::deep .tabla__vacio {
+  color: var(--color-text-muted);
+}
+
+/* ---------- Forms ---------- */
+
+.administracion ::deep .formulario {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.administracion ::deep .field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.administracion ::deep .field label {
+  font-weight: var(--font-weight-medium);
+}
+
+.administracion ::deep .field__opcional {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--text-sm);
+}
+
+.administracion ::deep .field__ayuda {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.administracion ::deep select.input {
+  /* A native select ignores min-height on some engines unless height is set with it. */
+  height: var(--control-size-comfortable);
+}
+
+/* ---------- Narrow ----------
+   A row stacks with every field labelled; it never scrolls sideways, which would hide a column
+   behind a gesture nobody discovers (DESIGN-SYSTEM §10.1). The header row is dropped because
+   each cell carries its own label instead. 639px is the narrow breakpoint literal — a media
+   query cannot read a custom property (tokens.css, "Layout"). */
+
+@media (max-width: 639px) {
+  .administracion ::deep .tabla,
+  .administracion ::deep .tabla tbody,
+  .administracion ::deep .tabla tr,
+  .administracion ::deep .tabla td {
+    display: block;
+    width: 100%;
+  }
+
+  .administracion ::deep .tabla thead {
+    display: none;
+  }
+
+  .administracion ::deep .tabla tr {
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+
+  .administracion ::deep .tabla tr + tr {
+    margin-top: var(--control-gap-min);
+  }
+
+  .administracion ::deep .tabla td,
+  .administracion ::deep .tabla tbody tr:last-child td {
+    padding: var(--space-1) 0;
+    border-bottom: none;
+  }
+
+  .administracion ::deep .tabla td::before {
+    content: attr(data-etiqueta) ": ";
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+  }
+}

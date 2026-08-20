@@ -42,9 +42,26 @@ public interface IMovimientoRepository
         int negocioId, DateOnly fechaEfectiva, TipoMovimientoCredito tipo, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// The movement already recorded under this idempotency key, or null when none exists yet
+    /// (README decision #6, 2026-08-19). The redemption use case in Application calls this before
+    /// writing anything, so a lost-response retry with the same key can return the original
+    /// <c>Canje</c> instead of writing a second one.
+    /// </summary>
+    Task<MovimientoCredito?> GetPorClaveIdempotenciaAsync(
+        int negocioId, string claveIdempotencia, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Appends one movement. Stamps <see cref="MovimientoCredito.SaldoResultante"/> from the
     /// current balance inside the same transaction as the insert (DATA-MODEL §4), so a concurrent
     /// append can never race past it.
     /// </summary>
+    /// <exception cref="Fidelizar.Domain.Exceptions.ConflictException">
+    /// <paramref name="movimiento"/> carries a <see cref="MovimientoCredito.ClaveIdempotencia"/>
+    /// that another request inserted first, in the instant between this call's own
+    /// <see cref="GetPorClaveIdempotenciaAsync"/> check and this insert — the unique partial index
+    /// on <c>(NegocioId, ClaveIdempotencia)</c> is what actually closes that race
+    /// (<c>CLAVE_IDEMPOTENCIA_EN_USO</c>); the caller re-reads the winner and returns it instead of
+    /// surfacing this as a failure.
+    /// </exception>
     Task<MovimientoCredito> AppendAsync(MovimientoCredito movimiento, CancellationToken cancellationToken = default);
 }

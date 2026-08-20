@@ -30,6 +30,26 @@ public sealed class SaldoService(
     public async Task<MovimientoCredito> RegistrarCanjeAsync(
         RegistrarCanjeRequest request, CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(request.ClaveIdempotencia))
+        {
+            throw new ValidationException(
+                "La clave de idempotencia es obligatoria (README decisión #6).",
+                "CLAVE_IDEMPOTENCIA_REQUERIDA");
+        }
+
+        // README decision #6, 2026-08-19: a retry with the same key returns the original result
+        // instead of writing a second Canje. Checked first, before any balance validation, so a
+        // retry of an originally-successful canje never re-runs RN-24/RN-25 against a balance the
+        // first attempt already changed.
+        var existente = await movimientoRepository.GetPorClaveIdempotenciaAsync(
+            request.NegocioId, request.ClaveIdempotencia, cancellationToken);
+        if (existente is not null)
+        {
+            return CoincideConElReintento(existente, request)
+                ? existente
+                : throw ClaveReutilizadaException();
+        }
+
         if (request.Monto <= 0m)
         {
             throw new ValidationException(
@@ -66,8 +86,42 @@ public sealed class SaldoService(
             monto: -request.Monto,
             hoy: request.Hoy,
             usuarioId: request.UsuarioId,
-            motivo: request.Motivo);
+            motivo: request.Motivo,
+            claveIdempotencia: request.ClaveIdempotencia);
 
-        return await movimientoRepository.AppendAsync(movimiento, cancellationToken);
+        try
+        {
+            return await movimientoRepository.AppendAsync(movimiento, cancellationToken);
+        }
+        catch (ConflictException)
+        {
+            // Lost the race: a concurrent request with the same key committed first (the unique
+            // partial index on (NegocioId, ClaveIdempotencia) is what actually stopped this one —
+            // see IMovimientoRepository.AppendAsync). The winner is the real result either way, so
+            // this behaves exactly like a retry that arrived a moment later.
+            var ganador = await movimientoRepository.GetPorClaveIdempotenciaAsync(
+                request.NegocioId, request.ClaveIdempotencia, cancellationToken);
+
+            return ganador is not null && CoincideConElReintento(ganador, request)
+                ? ganador
+                : throw ClaveReutilizadaException();
+        }
     }
+
+    /// <summary>
+    /// Whether the movement already on record under this key is the same logical redemption as
+    /// <paramref name="request"/> — a true retry — rather than a different one reusing the key by
+    /// mistake. <c>Monto</c> is compared against its stored, negated form (a <c>Canje</c> is
+    /// stored negative; the request carries the positive amount the cashier typed).
+    /// </summary>
+    private static bool CoincideConElReintento(MovimientoCredito existente, RegistrarCanjeRequest request) =>
+        existente.MiembroId == request.MiembroId
+        && existente.Monto == -request.Monto
+        && existente.FechaEfectiva == request.FechaEfectiva
+        && existente.Motivo == request.Motivo;
+
+    private static ConflictException ClaveReutilizadaException() => new(
+        "Esta clave de idempotencia ya se usó para un canje con otros datos (otro socio, monto, " +
+        "fecha o motivo). No es un reintento válido.",
+        "CLAVE_IDEMPOTENCIA_REUTILIZADA");
 }

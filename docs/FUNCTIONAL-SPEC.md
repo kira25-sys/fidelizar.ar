@@ -236,8 +236,8 @@ one.
 
 ## 12. Open decisions
 
-1. **Wording of the two consent texts.** These are legal texts and should be written or reviewed
-   by the business owner, not drafted by the development team.
+None. The one item that used to live here — the wording of the two consent texts — was approved
+by the owner 2026-08-19; see §13.4.
 
 ## 13. Decided (2026-08-12)
 
@@ -249,3 +249,12 @@ one.
 3. **A member of another branch is found and served normally.** The search returns members of
    every branch and a redemption can be registered anywhere — the program is one and the monthly
    target is global (RN-07).
+4. **The wording of the two consent texts (decided 2026-08-19).** Both approved, **provisional
+   until production** — to be reviewed again before the first paying client. The texts are a fixed
+   template in code; the business's `Razón Social`, `CUIT` and (for `DatosPersonales`) `Domicilio`
+   are resolved from that business's own `Negocio` row at render time, never written as literals.
+   The asymmetry between them is substantive, not stylistic, and every write path has to respect
+   it: `DatosPersonales` says alta is impossible without it — mandatory, alta rejected;
+   `DatosSensibles` says membership is possible without it and that it is revocable at any time
+   with no effect on the account — optional, alta accepted, and revoking it never touches the
+   member or the ledger.

@@ -1,0 +1,16 @@
+.forbidden-notice__titulo {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.forbidden-notice__cuerpo {
+  margin: var(--space-3) 0 var(--space-4);
+  color: var(--color-text-muted);
+}
+
+/* .btn is written for <button>; an <a> carrying it needs the link defaults neutralised. */
+.forbidden-notice a.btn {
+  text-decoration: none;
+  color: var(--color-text);
+}

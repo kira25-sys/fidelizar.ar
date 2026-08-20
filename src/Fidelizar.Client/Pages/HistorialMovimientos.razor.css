@@ -1,0 +1,219 @@
+.historial__mensaje-titulo {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.historial__mensaje-cuerpo {
+  margin: var(--space-3) 0 var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.historial__encabezado {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.historial__encabezado h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.historial__subtitulo {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.historial__saldo-etiqueta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+/* --text-2xl, not --text-display: the 56px figure exists so a customer reads it over the
+   cashier's shoulder (DESIGN-SYSTEM §5, RN-12). Nobody is standing at this screen — it is the
+   back office, whose budget is density (§1) — and the ledger below is what the reader came for. */
+.historial__saldo-monto {
+  margin: var(--space-1) 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.historial__saldo-monto--revision {
+  color: var(--color-warning);
+}
+
+.historial__aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.historial__vacio {
+  margin: var(--space-5) 0 0;
+  color: var(--color-text-muted);
+}
+
+.historial__tabla {
+  width: 100%;
+  margin-top: var(--space-5);
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.historial__tabla th,
+.historial__tabla td {
+  padding: var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.historial__tabla th {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.historial__col-num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Historical evidence, not the answer to "what is the balance" (I2) — it reads as supporting
+   detail so the eye lands on Monto first. */
+.historial__saldo-fila {
+  color: var(--color-text-muted);
+}
+
+.historial__retroactivo {
+  margin-left: var(--space-2);
+}
+
+.historial__pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.historial__conteo {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.historial__leyenda {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.historial__leyenda p {
+  margin: 0 0 var(--space-2);
+}
+
+.historial__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+/* .btn is written for <button>; an <a> carrying it needs the link defaults neutralised. */
+.historial__acciones a.btn,
+.historial__boton {
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.historial__volver {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-size-comfortable);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+
+/* Hover is guarded so it does not stick after a tap (DESIGN-SYSTEM §8.1). */
+@media (hover: hover) and (pointer: fine) {
+  .historial__volver:hover {
+    text-decoration: underline;
+  }
+}
+
+/* Narrow: the row becomes a stacked block with every field labelled — never a horizontally
+   scrolling table, which hides a money column behind a gesture nobody discovers
+   (DESIGN-SYSTEM §10.1). The column headings move into each cell via data-etiqueta; the
+   role="table"/"row"/"cell" attributes in the markup are what keep the structure announced once
+   display:block has stripped the implicit ones. */
+@media (max-width: 639px) {
+  .historial__tabla,
+  .historial__tabla tbody,
+  .historial__tabla tr,
+  .historial__tabla td {
+    display: block;
+  }
+
+  .historial__tabla thead {
+    display: none;
+  }
+
+  .historial__tabla tr {
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border-strong);
+  }
+
+  .historial__tabla td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-1) 0;
+    border-bottom: none;
+  }
+
+  .historial__tabla td::before {
+    content: attr(data-etiqueta);
+    flex: 0 0 auto;
+    color: var(--color-text-muted);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* The value side of [label | value] stays one item however many nodes it holds. */
+  .historial__valor {
+    text-align: right;
+  }
+
+  .historial__col-num {
+    text-align: right;
+  }
+
+  .historial__acciones a.btn,
+  .historial__pie .btn {
+    width: 100%;
+  }
+}

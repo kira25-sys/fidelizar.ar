@@ -1,0 +1,217 @@
+@page "/socios/{MiembroId:int}/completo"
+@inherits BackOfficePageBase
+@using System.Net
+@using Fidelizar.Client.Api
+@using Fidelizar.Shared.Miembros
+@inject IApiClient ApiClient
+
+@* S6 Ficha completa (FUNCTIONAL-SPEC §3 — Encargada and Dueño, never Cajero). The back office's
+   budget is density, not speed (DESIGN-SYSTEM §1): this is read sitting down, so every field the
+   role is entitled to see is on screen at once, labelled, with no reveal taps.
+
+   It is the one screen in the product that renders a phone number and a DNI, which is why it is
+   a route of its own and not a section of S3: the counter card must stay safe to leave facing
+   the customer (FUNCTIONAL-SPEC §5), and it cannot be if the same component sometimes carries
+   personal data. No balance is rendered here at all — GET /completo does not carry one, and R3
+   forbids inventing one without its cutoff date beside it (ARCHITECTURE §13). The balance lives
+   on S3 and on S7, each with its CorteBadge. *@
+
+<PageTitle>Ficha completa — Fidelizar</PageTitle>
+
+@if (!SessionService.IsAuthenticated)
+{
+    @* Redirecting to S1; render nothing rather than flash a screen this reader may not see. *@
+}
+else if (!Autorizado || _prohibido)
+{
+    <ForbiddenNotice Volver="@($"/socios/{MiembroId}")" />
+}
+else if (_loading)
+{
+    <div class="card" role="status" aria-live="polite">
+        <p>Cargando la ficha completa…</p>
+    </div>
+}
+else if (_noEncontrado)
+{
+    <div class="card ficha-completa__mensaje">
+        <p class="ficha-completa__mensaje-titulo" tabindex="-1" @ref="_focusTarget">No encontramos ese socio.</p>
+        <p class="ficha-completa__mensaje-cuerpo">Puede que ya no esté disponible. Volvé a buscar.</p>
+        <a class="btn btn--secondary ficha-completa__boton" href="/">Volver a la búsqueda</a>
+    </div>
+}
+else if (_problem is not null)
+{
+    <ErrorNotice Problem="_problem" OnRetry="CargarAsync" />
+}
+else if (_ficha is not null)
+{
+    <div class="card ficha-completa">
+        <div class="ficha-completa__encabezado">
+            <div>
+                <h1 tabindex="-1" @ref="_focusTarget">@_ficha.Nombre</h1>
+                <p class="ficha-completa__subtitulo">Ficha completa</p>
+            </div>
+            @if (!_ficha.Activo)
+            {
+                <span class="badge badge--warning">Socio inactivo</span>
+            }
+        </div>
+
+        @* Not a legal disclaimer nobody reads: two facts the person looking at this screen acts
+           on. The first is the counter's privacy rule restated where it can actually be broken
+           (FUNCTIONAL-SPEC §5); the second is true of every single read, not just the first —
+           IFichaCompletaService writes a RegistroAuditoria row before returning
+           (docs/REST-CONTRACT-F1.md). Telling someone they are being logged is fairer than
+           logging them quietly. *@
+        <p class="ficha-completa__aviso">
+            <span aria-hidden="true">🔒</span>
+            Esta pantalla muestra teléfono y DNI: no la dejes a la vista del mostrador.
+            Cada consulta queda registrada en la auditoría.
+        </p>
+
+        <dl class="ficha-completa__datos">
+            <div class="ficha-completa__dato">
+                <dt>N° de socio</dt>
+                <dd>@Texto(_ficha.NumeroSocio)</dd>
+            </div>
+            <div class="ficha-completa__dato">
+                <dt>Teléfono</dt>
+                <dd>@Texto(_ficha.Telefono)</dd>
+            </div>
+            <div class="ficha-completa__dato">
+                <dt>DNI</dt>
+                <dd>@Texto(_ficha.Dni)</dd>
+            </div>
+            <div class="ficha-completa__dato">
+                @* Day and month only — the record tracks no birth year (RN-11), so no age is
+                   derivable from this screen and none is shown. *@
+                <dt>Cumpleaños</dt>
+                <dd>@Texto(_ficha.FechaNacimiento)</dd>
+            </div>
+            <div class="ficha-completa__dato">
+                <dt>ID en el sistema de ventas</dt>
+                <dd>
+                    @if (string.IsNullOrEmpty(_ficha.ClienteExternoId))
+                    {
+                        @* An unlinked member accrues nothing (FUNCTIONAL-SPEC §7). F1-14 builds
+                           the list and the linking flow; this only stops the state from being
+                           invisible until then. *@
+                        <span class="badge badge--warning">Sin vincular</span>
+                        <span class="ficha-completa__nota">No acumula crédito hasta vincularlo.</span>
+                    }
+                    else
+                    {
+                        @_ficha.ClienteExternoId
+                    }
+                </dd>
+            </div>
+            <div class="ficha-completa__dato">
+                @* The branch's name needs GET /api/sucursales, which is DuenoOnly — an Encargada
+                   reading her own member's ficha would get a 403 for it, so the number is what
+                   this screen can honestly show today. *@
+                <dt>Sucursal</dt>
+                <dd>@(_ficha.SucursalId is { } sucursalId ? $"N° {sucursalId}" : "Sin sucursal asignada")</dd>
+            </div>
+        </dl>
+
+        <div class="ficha-completa__acciones">
+            <a class="btn btn--secondary" href="@($"/socios/{MiembroId}/movimientos")">Ver historial de movimientos</a>
+            <a class="ficha-completa__volver" href="@($"/socios/{MiembroId}")">← Volver a la ficha del mostrador</a>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int MiembroId { get; set; }
+
+    private FichaCompletaResponse? _ficha;
+    private ApiProblem? _problem;
+    private bool _loading;
+    private bool _noEncontrado;
+    private bool _prohibido;
+    private bool _pendingFocus;
+    private ElementReference _focusTarget;
+    private int? _cargadoParaId;
+    private CancellationTokenSource? _cts;
+
+    /// <summary>An absent optional field reads as a sentence, never as an empty cell — a blank
+    /// row is indistinguishable from a screen that failed to render it.</summary>
+    private static string Texto(string? valor) => string.IsNullOrEmpty(valor) ? "No registrado" : valor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Autorizado || _cargadoParaId == MiembroId)
+        {
+            return;
+        }
+
+        await CargarAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The ficha only exists in the DOM once the fetch settles, long after App.razor's
+        // FocusOnNavigate has already looked for an <h1> and found none (DESIGN-SYSTEM §9.2).
+        if (_pendingFocus)
+        {
+            _pendingFocus = false;
+            await _focusTarget.FocusAsync();
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        _cts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+
+        _cargadoParaId = MiembroId;
+        _loading = true;
+        _problem = null;
+        _noEncontrado = false;
+        _prohibido = false;
+        _ficha = null;
+        StateHasChanged();
+
+        var resultado = await ApiClient.GetAsync<FichaCompletaResponse>(
+            $"api/miembros/{MiembroId}/completo", cts.Token);
+
+        if (cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _loading = false;
+
+        if (resultado.Success)
+        {
+            _ficha = resultado.Value;
+        }
+        else if (resultado.Problem!.StatusCode == HttpStatusCode.Forbidden)
+        {
+            // The server said no. Autorizado already covers the ordinary case, so reaching here
+            // means the two disagree — a role changed mid-session, or the client-side check is
+            // wrong. Either way the server's answer is the one that counts and nothing about the
+            // member is rendered.
+            _prohibido = true;
+        }
+        else if (resultado.Problem!.StatusCode == HttpStatusCode.NotFound)
+        {
+            _noEncontrado = true;
+        }
+        else
+        {
+            _problem = resultado.Problem;
+        }
+
+        _pendingFocus = _problem is null && !_prohibido;
+        StateHasChanged();
+    }
+
+    public override void Dispose()
+    {
+        _cts?.Cancel();
+        base.Dispose();
+    }
+}

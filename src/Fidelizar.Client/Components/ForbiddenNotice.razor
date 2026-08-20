@@ -1,0 +1,36 @@
+@* The 403 treatment for the back-office screens (S6, S7 — FUNCTIONAL-SPEC §3: "—" for Cajero).
+   Separate from ErrorNotice on purpose: a 403 is not a transient failure, so it gets no
+   "Reintentar" button, and it says nothing at all about the member behind the URL — a message
+   that changed depending on whether that id existed would leak exactly what the policy protects.
+   It focuses itself once rendered: the route already changed and App.razor's FocusOnNavigate ran
+   long before this replaced the page body, so nothing else would announce where the reader
+   landed (DESIGN-SYSTEM §9.2). *@
+
+<div class="card forbidden-notice" role="alert">
+    <p class="forbidden-notice__titulo" tabindex="-1" @ref="_titulo">
+        No tenés permiso para ver esta pantalla.
+    </p>
+    <p class="forbidden-notice__cuerpo">
+        La ficha completa y el historial de movimientos son para la encargada o el dueño.
+        Si necesitás alguno de esos datos, pedíselo a la encargada.
+    </p>
+    @if (!string.IsNullOrEmpty(Volver))
+    {
+        <a class="btn btn--secondary" href="@Volver">Volver a la ficha del socio</a>
+    }
+</div>
+
+@code {
+    /// <summary>Where "volver" goes. Unbound: no link is rendered.</summary>
+    [Parameter] public string? Volver { get; set; }
+
+    private ElementReference _titulo;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await _titulo.FocusAsync();
+        }
+    }
+}

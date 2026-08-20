@@ -1,0 +1,373 @@
+@page "/socios/{MiembroId:int}/movimientos"
+@inherits BackOfficePageBase
+@using System.Net
+@using Fidelizar.Client.Api
+@using Fidelizar.Client.Formatting
+@using Fidelizar.Shared.Miembros
+@using Fidelizar.Shared.Movimientos
+@inject IApiClient ApiClient
+
+@* S7 Historial de movimientos (FUNCTIONAL-SPEC §3 — Encargada and Dueño, never Cajero; §5 lists
+   "full movement history" among the things the counter screen never shows).
+
+   Two calls, on purpose:
+     - GET /miembros/{id}/movimientos is the screen — the ledger, newest first.
+     - GET /miembros/{id}/ficha-mostrador supplies the header: whose ledger this is, and today's
+       balance with its cutoff date. S6's endpoint would also carry the name, but reading it
+       writes a "VerFichaCompleta" audit row (docs/REST-CONTRACT-F1.md), and stamping that on
+       someone who only opened the history would make the audit log say something untrue.
+   The header is not allowed to block the ledger: if it fails — including the 409 a business with
+   no Corte declared returns — the movements still render (see CargarAsync).
+
+   No row is editable and none is deletable, at any width: the ledger is append-only (I1) and a
+   mistake is corrected by S8, which appends an Ajuste (FUNCTIONAL-SPEC §8). F1-11 adds that
+   action here; this task deliberately leaves no affordance that hints at an edit. *@
+
+<PageTitle>Historial de movimientos — Fidelizar</PageTitle>
+
+@if (!SessionService.IsAuthenticated)
+{
+    @* Redirecting to S1; render nothing rather than flash a screen this reader may not see. *@
+}
+else if (!Autorizado || _prohibido)
+{
+    <ForbiddenNotice Volver="@($"/socios/{MiembroId}")" />
+}
+else if (_loading)
+{
+    <div class="card" role="status" aria-live="polite">
+        <p>Cargando el historial de movimientos…</p>
+    </div>
+}
+else if (_noEncontrado)
+{
+    <div class="card historial__mensaje">
+        <p class="historial__mensaje-titulo" tabindex="-1" @ref="_focusTarget">No encontramos ese socio.</p>
+        <p class="historial__mensaje-cuerpo">Puede que ya no esté disponible. Volvé a buscar.</p>
+        <a class="btn btn--secondary historial__boton" href="/">Volver a la búsqueda</a>
+    </div>
+}
+else if (_problem is not null)
+{
+    <ErrorNotice Problem="_problem" OnRetry="CargarAsync" />
+}
+else if (_movimientos is not null)
+{
+    <div class="card historial">
+        <div class="historial__encabezado">
+            <div>
+                <h1 tabindex="-1" @ref="_focusTarget">@(_ficha?.Nombre ?? "Historial de movimientos")</h1>
+                @if (_ficha is not null)
+                {
+                    <p class="historial__subtitulo">
+                        Historial de movimientos@(string.IsNullOrEmpty(_ficha.NumeroSocio) ? "" : $" · N° {_ficha.NumeroSocio}")
+                    </p>
+                }
+            </div>
+
+            @if (_ficha is not null)
+            {
+                @* R3, without exception: the balance never appears without its cutoff date beside
+                   it (ARCHITECTURE §13, FUNCTIONAL-SPEC §5). *@
+                <div class="historial__saldo">
+                    <p class="historial__saldo-etiqueta">Saldo disponible hoy</p>
+                    <p class="historial__saldo-monto amount @(_ficha.Saldo < 0 ? "historial__saldo-monto--revision" : "")">
+                        @MoneyFormatter.Format(_ficha.Saldo)
+                    </p>
+                    <CorteBadge CorteFecha="_ficha.CorteFecha" MostrarDetalle="true" />
+                </div>
+            }
+        </div>
+
+        @if (_corteNoDeclarado)
+        {
+            <p class="historial__aviso">
+                <span aria-hidden="true">⚠</span>
+                Todavía no hay datos de ventas cargados para este negocio, así que no podemos mostrar
+                el saldo de hoy. El historial de abajo sí está completo.
+            </p>
+        }
+        else if (_fichaNoDisponible)
+        {
+            <p class="historial__aviso">
+                <span aria-hidden="true">⚠</span>
+                No pudimos cargar el saldo de hoy. El historial de abajo sí está completo.
+            </p>
+        }
+
+        @if (_movimientos.Count == 0)
+        {
+            @* Not an error — a member registered at the counter and not yet linked to the POS has
+               no movements at all, which is a normal state (FUNCTIONAL-SPEC §7). Neutral tone,
+               never danger tokens (DESIGN-SYSTEM §11.2). *@
+            <p class="historial__vacio">Este socio todavía no tiene movimientos registrados.</p>
+        }
+        else
+        {
+            @* role="table" and friends are explicit because the narrow layout switches these
+               elements to display:block, which drops the implicit table semantics in every
+               browser — a stacked, labelled block for a phone must not cost a screen-reader user
+               the table it still is (DESIGN-SYSTEM §10.1). *@
+            <table class="historial__tabla" role="table">
+                <caption class="visually-hidden">
+                    Movimientos del socio, del más reciente al más antiguo.
+                </caption>
+                <thead role="rowgroup">
+                    <tr role="row">
+                        <th scope="col" role="columnheader">Fecha efectiva</th>
+                        <th scope="col" role="columnheader">Tipo</th>
+                        <th scope="col" role="columnheader" class="historial__col-num">Monto</th>
+                        <th scope="col" role="columnheader" class="historial__col-num">Saldo resultante</th>
+                        <th scope="col" role="columnheader">Motivo</th>
+                        <th scope="col" role="columnheader">Registrado</th>
+                        <th scope="col" role="columnheader">Registró</th>
+                    </tr>
+                </thead>
+                <tbody role="rowgroup">
+                    @foreach (var movimiento in Visibles)
+                    {
+                        <tr role="row">
+                            <td role="cell" data-etiqueta="Fecha efectiva">
+                                @* One wrapper, not two loose nodes: at narrow the cell is a flex
+                                   row of [label | value], and an unwrapped date plus badge would
+                                   become two separate flex items pushed apart by space-between. *@
+                                <span class="historial__valor">
+                                    @FechaFormatter.Corta(movimiento.FechaEfectiva)
+                                    @if (EsRetroactivo(movimiento))
+                                    {
+                                        <span class="badge badge--neutral historial__retroactivo">Retroactivo</span>
+                                    }
+                                </span>
+                            </td>
+                            <td role="cell" data-etiqueta="Tipo">
+                                <span class="badge @ClaseBadgeTipo(movimiento.Tipo)">@EtiquetaTipo(movimiento.Tipo)</span>
+                            </td>
+                            <td role="cell" data-etiqueta="Monto" class="historial__col-num amount">
+                                @MontoConSigno(movimiento.Monto)
+                            </td>
+                            <td role="cell" data-etiqueta="Saldo resultante" class="historial__col-num amount historial__saldo-fila">
+                                @MoneyFormatter.Format(movimiento.SaldoResultante)
+                            </td>
+                            <td role="cell" data-etiqueta="Motivo">@(string.IsNullOrEmpty(movimiento.Motivo) ? "—" : movimiento.Motivo)</td>
+                            <td role="cell" data-etiqueta="Registrado">@FechaFormatter.ConHora(movimiento.RegistradoEn)</td>
+                            <td role="cell" data-etiqueta="Registró">@(string.IsNullOrEmpty(movimiento.UsuarioNombre) ? "Sistema" : movimiento.UsuarioNombre)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            <div class="historial__pie">
+                <p class="historial__conteo" role="status" aria-live="polite">
+                    Mostrando @Mostrados de @_movimientos.Count @(_movimientos.Count == 1 ? "movimiento" : "movimientos").
+                </p>
+                @if (_visibles < _movimientos.Count)
+                {
+                    <button type="button" class="btn btn--secondary" @onclick="MostrarMas">
+                        Mostrar @Math.Min(TamanoPagina, _movimientos.Count - _visibles) más
+                    </button>
+                }
+            </div>
+
+            <div class="historial__leyenda">
+                <p>
+                    <strong>Fecha efectiva</strong> es cuándo pasó en el mostrador.
+                    <strong>Registrado</strong> es cuándo lo recibió el sistema. Un canje anotado en papel
+                    durante un corte de luz y cargado al día siguiente tiene las dos fechas distintas, y
+                    aparece marcado como retroactivo.
+                </p>
+                <p>
+                    <strong>Saldo resultante</strong> es el saldo que quedó justo después de ese movimiento,
+                    no el de hoy.
+                </p>
+                <p>
+                    Un movimiento no se edita ni se borra nunca: si hay un error, se corrige con un ajuste
+                    que queda registrado como una línea más.
+                </p>
+            </div>
+        }
+
+        <div class="historial__acciones">
+            <a class="btn btn--secondary" href="@($"/socios/{MiembroId}/completo")">Ver ficha completa</a>
+            <a class="historial__volver" href="@($"/socios/{MiembroId}")">← Volver a la ficha del mostrador</a>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>The whole ledger arrives in one array — <c>GET /miembros/{id}/movimientos</c>
+    /// takes no paging parameters (docs/api/openapi-fase1.yaml). So the page size is a rendering
+    /// limit, not a request limit: it keeps a member with hundreds of rows from painting all of
+    /// them at once on a shop computer, and "mostrar más" costs no round trip. If the ledger ever
+    /// grows past what one response should carry, that is a change to the endpoint, not to this
+    /// number.</summary>
+    private const int TamanoPagina = 25;
+
+    [Parameter] public int MiembroId { get; set; }
+
+    private List<MovimientoResponse>? _movimientos;
+    private FichaMostradorResponse? _ficha;
+    private ApiProblem? _problem;
+    private bool _loading;
+    private bool _noEncontrado;
+    private bool _prohibido;
+    private bool _corteNoDeclarado;
+    private bool _fichaNoDisponible;
+    private bool _pendingFocus;
+    private int _visibles = TamanoPagina;
+    private ElementReference _focusTarget;
+    private int? _cargadoParaId;
+    private CancellationTokenSource? _cts;
+
+    private int Mostrados => _movimientos is null ? 0 : Math.Min(_visibles, _movimientos.Count);
+
+    private IEnumerable<MovimientoResponse> Visibles => _movimientos?.Take(Mostrados) ?? [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Autorizado || _cargadoParaId == MiembroId)
+        {
+            return;
+        }
+
+        await CargarAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingFocus)
+        {
+            _pendingFocus = false;
+            await _focusTarget.FocusAsync();
+        }
+    }
+
+    private async Task CargarAsync()
+    {
+        _cts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+
+        _cargadoParaId = MiembroId;
+        _loading = true;
+        _problem = null;
+        _noEncontrado = false;
+        _prohibido = false;
+        _corteNoDeclarado = false;
+        _fichaNoDisponible = false;
+        _movimientos = null;
+        _ficha = null;
+        _visibles = TamanoPagina;
+        StateHasChanged();
+
+        var movimientosTask = ApiClient.GetAsync<List<MovimientoResponse>>(
+            $"api/miembros/{MiembroId}/movimientos", cts.Token);
+        var fichaTask = ApiClient.GetAsync<FichaMostradorResponse>(
+            $"api/miembros/{MiembroId}/ficha-mostrador", cts.Token);
+
+        try
+        {
+            await Task.WhenAll(movimientosTask, fichaTask);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // superseded by a newer load, or the page went away
+        }
+
+        if (cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _loading = false;
+
+        var movimientos = movimientosTask.Result;
+        if (movimientos.Success)
+        {
+            _movimientos = movimientos.Value;
+        }
+        else if (movimientos.Problem!.StatusCode == HttpStatusCode.Forbidden)
+        {
+            // The server said no. Autorizado already covers the ordinary case, so reaching here
+            // means the two disagree — a role changed mid-session, or the client-side check is
+            // wrong. Either way the server's answer is the one that counts and no row is drawn.
+            _prohibido = true;
+        }
+        else if (movimientos.Problem!.StatusCode == HttpStatusCode.NotFound)
+        {
+            _noEncontrado = true;
+        }
+        else
+        {
+            _problem = movimientos.Problem;
+        }
+
+        // The header is secondary: it never turns into the page's error state, because losing
+        // today's balance is not a reason to withhold a ledger the manager can already see.
+        var ficha = fichaTask.Result;
+        if (ficha.Success)
+        {
+            _ficha = ficha.Value;
+        }
+        else if (ficha.Problem!.ErrorCode == "CORTE_NO_DECLARADO")
+        {
+            _corteNoDeclarado = true;
+        }
+        else if (!_prohibido && !_noEncontrado && _problem is null)
+        {
+            _fichaNoDisponible = true;
+        }
+
+        _pendingFocus = _problem is null && !_prohibido;
+        StateHasChanged();
+    }
+
+    private void MostrarMas() => _visibles += TamanoPagina;
+
+    /// <summary>
+    /// DATA-MODEL §4: <c>FechaEfectiva</c> is when it happened, <c>RegistradoEn</c> is when the
+    /// system learned about it. Both columns are always on screen; this badge names the one case
+    /// where the gap was a decision rather than a mechanism — a <c>Canje</c> dated in the past,
+    /// which is what stands in for offline mode and carries a mandatory reason
+    /// (FUNCTIONAL-SPEC §6).
+    ///
+    /// Restricted to <c>Canje</c> on purpose. An <c>Acumulacion</c>'s two dates differ on every
+    /// single row by design — sales arrive weekly, by hand (R3) — and the migrated
+    /// <c>SaldoInicial</c> rows carry their historical date against a migration timestamp. Marking
+    /// those "retroactivo" would put the badge on almost the whole ledger and leave it meaning
+    /// nothing.
+    /// </summary>
+    private static bool EsRetroactivo(MovimientoResponse movimiento) =>
+        movimiento.Tipo == "Canje"
+        && movimiento.FechaEfectiva != FechaFormatter.FechaLocalDe(movimiento.RegistradoEn);
+
+    /// <summary>An explicit "+" so the direction of a movement reads without comparing it to the
+    /// row above (the "−" comes from MoneyFormatter itself). The badge beside it carries the same
+    /// information in words: colour never says anything on its own (DESIGN-SYSTEM §4).</summary>
+    private static string MontoConSigno(decimal monto) =>
+        monto > 0 ? $"+{MoneyFormatter.Format(monto)}" : MoneyFormatter.Format(monto);
+
+    /// <summary>The enum's own name, as it travels on the wire. The fallback is deliberate:
+    /// <c>Tipo</c> is append-only (DATA-MODEL §4), so a type added later shows up under its raw
+    /// name instead of vanishing from a ledger row.</summary>
+    private static string EtiquetaTipo(string tipo) => tipo switch
+    {
+        "SaldoInicial" => "Saldo inicial",
+        "Acumulacion" => "Acumulación",
+        "Canje" => "Canje",
+        "Ajuste" => "Ajuste",
+        _ => tipo,
+    };
+
+    private static string ClaseBadgeTipo(string tipo) => tipo switch
+    {
+        "Acumulacion" => "badge--success",
+        "Ajuste" => "badge--warning",
+        _ => "badge--neutral",
+    };
+
+    public override void Dispose()
+    {
+        _cts?.Cancel();
+        base.Dispose();
+    }
+}

@@ -9,6 +9,7 @@
 @inject IApiClient ApiClient
 @inject NavigationManager Navigation
 @inject BusquedaSocioCache Cache
+@inject ISessionService SessionService
 @implements IDisposable
 
 @if (_loading)
@@ -81,6 +82,19 @@ else if (_ficha is not null)
             aria-disabled="@(_ficha.Saldo < 0 ? "true" : "false")">
             Registrar canje
         </button>
+
+        @* S6 and S7's only way in (F1-10). Rendered for Encargada/Dueño only, and that is
+           presentation, not protection: both endpoints carry EncargadaOrAbove server-side and a
+           Cajero who types either URL gets a 403 and a Spanish explanation, not data
+           (FUNCTIONAL-SPEC §3). The links sit below the redeem button on purpose — nothing may
+           come between the cashier and the one action the counter screen exists for. *@
+        @if (Roles.EsEncargadaODueno(SessionService.Current?.Rol))
+        {
+            <div class="ficha-socio__back-office">
+                <a href="@($"/socios/{MiembroId}/completo")">Ver ficha completa</a>
+                <a href="@($"/socios/{MiembroId}/movimientos")">Ver historial de movimientos</a>
+            </div>
+        }
     </div>
 }
 

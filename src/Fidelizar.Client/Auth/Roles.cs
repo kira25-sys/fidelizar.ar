@@ -36,4 +36,12 @@ public static class Roles
     /// the branch field instead of waiting for a SUCURSAL_REQUERIDA the owner could have avoided.
     /// </summary>
     public static bool RequiereSucursal(string rol) => rol is Cajero or Encargada;
+
+    /// <summary>
+    /// Mirrors the server's <c>EncargadaOrAbove</c> policy — S6, S7, S8 and S9
+    /// (FUNCTIONAL-SPEC §3). Presentation only: every one of those endpoints carries
+    /// <c>[Authorize(Policy = Policies.EncargadaOrAbove)]</c>, so a <c>Cajero</c> who types the
+    /// URL gets a server 403 whatever this returns.
+    /// </summary>
+    public static bool EsEncargadaODueno(string? rol) => rol is Encargada or Dueno;
 }

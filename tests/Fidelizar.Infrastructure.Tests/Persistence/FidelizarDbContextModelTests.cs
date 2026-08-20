@@ -128,6 +128,44 @@ public class FidelizarDbContextModelTests
     }
 
     [Fact]
+    public void MovimientoCredito_ClaveIdempotencia_es_texto_nullable()
+    {
+        // README decisión #6 (2026-08-19): la columna existe pero solo Canje la usa — nullable
+        // para todo lo demás.
+        var entidad = GetEntity<MovimientoCredito>(BuildModel());
+        var propiedad = entidad.FindProperty(nameof(MovimientoCredito.ClaveIdempotencia))!;
+
+        Assert.True(propiedad.IsNullable);
+        Assert.Equal(typeof(string), propiedad.ClrType);
+    }
+
+    [Fact]
+    public void MovimientoCredito_tiene_indice_unico_parcial_por_ClaveIdempotencia()
+    {
+        // La garantía contra un Canje duplicado por reintento vive acá, en el índice — no en un
+        // chequear-y-después-insertar de código, que una carrera puede saltarse (README #6).
+        var entidad = GetEntity<MovimientoCredito>(BuildModel());
+
+        var indice = entidad.GetIndexes().Single(i =>
+            i.Properties.Select(p => p.Name).SequenceEqual(["NegocioId", "ClaveIdempotencia"]));
+
+        Assert.True(indice.IsUnique);
+        Assert.Equal("\"ClaveIdempotencia\" IS NOT NULL", indice.GetFilter());
+    }
+
+    [Fact]
+    public void Negocio_Domicilio_es_texto_nullable()
+    {
+        // Resuelve el placeholder [DOMICILIO] del texto de consentimiento DatosPersonales
+        // (TextosConsentimiento) — nunca un literal de negocio en código (F1-idempotencia-y-alta).
+        var entidad = GetEntity<Negocio>(BuildModel());
+        var propiedad = entidad.FindProperty(nameof(Negocio.Domicilio))!;
+
+        Assert.True(propiedad.IsNullable);
+        Assert.Equal(typeof(string), propiedad.ClrType);
+    }
+
+    [Fact]
     public void Corte_tiene_indice_unico_por_NegocioId()
     {
         var entidad = GetEntity<Corte>(BuildModel());

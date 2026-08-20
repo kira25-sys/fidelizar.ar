@@ -72,7 +72,8 @@ public class SaldoServiceTests
         await repositorio.AppendAsync(MovimientoCredito.Crear(
             NegocioId, MiembroId, Hoy, DateTime.UtcNow, TipoMovimientoCredito.SaldoInicial, 100m, Hoy));
 
-        var request = new RegistrarCanjeRequest(NegocioId, MiembroId, 150m, "Quiere canjear de más", null, Hoy, Hoy);
+        var request = new RegistrarCanjeRequest(
+            NegocioId, MiembroId, 150m, "Quiere canjear de más", null, Hoy, Hoy, "clave-supera-saldo");
 
         var ex = await Assert.ThrowsAsync<ValidationException>(() => servicio.RegistrarCanjeAsync(request));
 
@@ -92,7 +93,8 @@ public class SaldoServiceTests
             NegocioId, MiembroId, Hoy, DateTime.UtcNow, TipoMovimientoCredito.Ajuste, -200m, Hoy,
             motivo: "Venta anulada después de canjeado el crédito (RN-25)"));
 
-        var request = new RegistrarCanjeRequest(NegocioId, MiembroId, 10m, "Intento durante revisión", null, Hoy, Hoy);
+        var request = new RegistrarCanjeRequest(
+            NegocioId, MiembroId, 10m, "Intento durante revisión", null, Hoy, Hoy, "clave-saldo-negativo");
 
         var ex = await Assert.ThrowsAsync<ValidationException>(() => servicio.RegistrarCanjeAsync(request));
 
@@ -106,13 +108,14 @@ public class SaldoServiceTests
         await repositorio.AppendAsync(MovimientoCredito.Crear(
             NegocioId, MiembroId, Hoy, DateTime.UtcNow, TipoMovimientoCredito.SaldoInicial, 1_000m, Hoy));
 
-        var request = new RegistrarCanjeRequest(NegocioId, MiembroId, 300m, "Canje válido", 7, Hoy, Hoy);
+        var request = new RegistrarCanjeRequest(NegocioId, MiembroId, 300m, "Canje válido", 7, Hoy, Hoy, "clave-canje-valido");
 
         var movimiento = await servicio.RegistrarCanjeAsync(request);
 
         Assert.Equal(TipoMovimientoCredito.Canje, movimiento.Tipo);
         Assert.Equal(-300m, movimiento.Monto);
         Assert.Equal("Canje válido", movimiento.Motivo);
+        Assert.Equal("clave-canje-valido", movimiento.ClaveIdempotencia);
         Assert.Equal(700m, await servicio.ObtenerSaldoAsync(NegocioId, MiembroId));
     }
 
@@ -121,7 +124,7 @@ public class SaldoServiceTests
     {
         var servicio = CrearServicio(out _);
 
-        var request = new RegistrarCanjeRequest(NegocioId, MiembroId, 0m, "Monto inválido", null, Hoy, Hoy);
+        var request = new RegistrarCanjeRequest(NegocioId, MiembroId, 0m, "Monto inválido", null, Hoy, Hoy, "clave-monto-invalido");
 
         var ex = await Assert.ThrowsAsync<ValidationException>(() => servicio.RegistrarCanjeAsync(request));
         Assert.Equal("MONTO_INVALIDO", ex.ErrorCode);

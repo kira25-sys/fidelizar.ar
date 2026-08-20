@@ -12,6 +12,14 @@ public sealed class Negocio
 
     public string? Cuit { get; init; }
 
+    /// <summary>
+    /// The business's legal address. Nullable — not every business has it loaded yet — but this
+    /// is what resolves the <c>[DOMICILIO]</c> placeholder in the <c>DatosPersonales</c> consent
+    /// text (F1-idempotencia-y-alta, 2026-08-19): the wording is fixed, the identifying data is
+    /// this business's own, never a literal in code (CLAUDE.md).
+    /// </summary>
+    public string? Domicilio { get; init; }
+
     public bool Activo { get; init; } = true;
 
     public DateTime CreadoEn { get; init; }

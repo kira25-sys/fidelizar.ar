@@ -6,10 +6,11 @@ namespace Fidelizar.Application.Services;
 /// <param name="NegocioId">Required, not a convention (I8).</param>
 /// <param name="MiembroId">The member the consent is about.</param>
 /// <param name="Tipo">Which kind of data the consent covers.</param>
-/// <param name="VersionTexto">Which wording of the consent text the member was shown. The actual
-/// legal wording for the two consent texts is an open decision (docs/README.md #3, owned by the
-/// business owner) — this service does not invent one, it only records whichever version the
-/// caller supplies.</param>
+/// <param name="VersionTexto">Which wording of the consent text the member was shown. The two
+/// approved texts and their version tags live in
+/// <see cref="Fidelizar.Domain.Consentimientos.TextosConsentimiento"/> (owner-approved
+/// 2026-08-19, provisional until production; former open decision docs/README.md #3) — this
+/// service does not invent one, it only records whichever version the caller supplies.</param>
 /// <param name="Canal">How it was obtained.</param>
 /// <param name="OcurridoEn">When it happened, in UTC.</param>
 /// <param name="RegistradoPorUsuarioId">Who recorded it. Null for self-service.</param>

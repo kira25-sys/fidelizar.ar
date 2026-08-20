@@ -23,6 +23,8 @@ public static class ApplicationServicesConfigurationExtensions
         services.AddScoped<ICierreDiarioService, CierreDiarioService>();
         services.AddScoped<IUsuarioService, UsuarioService>();
         services.AddScoped<ISucursalService, SucursalService>();
+        services.AddScoped<IAltaMiembroService, AltaMiembroService>();
+        services.AddScoped<IConsentimientoTextoService, ConsentimientoTextoService>();
 
         return services;
     }

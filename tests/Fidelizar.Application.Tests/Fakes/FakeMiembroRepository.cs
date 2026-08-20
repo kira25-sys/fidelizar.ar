@@ -1,3 +1,4 @@
+using System.Reflection;
 using Fidelizar.Domain.Entities;
 using Fidelizar.Domain.Repositories;
 using Fidelizar.Domain.Texto;
@@ -11,9 +12,18 @@ namespace Fidelizar.Application.Tests.Fakes;
 /// </summary>
 public sealed class FakeMiembroRepository : IMiembroRepository
 {
+    private static readonly PropertyInfo IdProperty = typeof(Miembro).GetProperty(nameof(Miembro.Id))!;
+
     private readonly List<Miembro> _miembros = [];
 
+    public IReadOnlyList<Miembro> Miembros => _miembros;
+
     public void Sembrar(Miembro miembro) => _miembros.Add(miembro);
+
+    /// <summary>Test-only: undoes an <see cref="AddAsync"/>, for tests proving a wrapping
+    /// transaction rolled back correctly (ARCHITECTURE §11 — Application runs with no database, so
+    /// there is no real ROLLBACK to exercise here; this fake stands in for what one would undo).</summary>
+    public void Quitar(Miembro miembro) => _miembros.Remove(miembro);
 
     /// <summary>Builds and seeds an invented member with just enough to exercise a lookup.</summary>
     public Miembro SembrarNuevo(int negocioId, int id, string nombre = "Socia De Prueba")
@@ -47,8 +57,16 @@ public sealed class FakeMiembroRepository : IMiembroRepository
             .OrderBy(m => m.Nombre)
             .ToList());
 
+    /// <summary>
+    /// Assigns an id the way the real repository does — EF populates <c>Miembro.Id</c> on
+    /// <c>SaveChangesAsync</c>. Without it every newly added member keeps <c>Id = 0</c>, and a test
+    /// asserting a <c>Consentimiento</c> was tied to the member it belongs to would compare 0 to 0
+    /// and pass on any member (ARCHITECTURE §11: the fake has to be faithful where the assertion
+    /// depends on it).
+    /// </summary>
     public Task<Miembro> AddAsync(Miembro miembro, CancellationToken cancellationToken = default)
     {
+        IdProperty.SetValue(miembro, _miembros.Count == 0 ? 1 : _miembros.Max(m => m.Id) + 1);
         _miembros.Add(miembro);
         return Task.FromResult(miembro);
     }

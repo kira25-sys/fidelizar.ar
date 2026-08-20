@@ -52,12 +52,13 @@ Collected from the documents above. None of them may be resolved by an agent on 
 | --- | --- | --- | --- |
 | 1 | Tolerance on the `SUM(subtotal)` vs `total_venta` check | CANONICAL-FORMAT §10 | Phase 2 |
 | 2 | Returns and credit notes — how the POS even expresses them | CANONICAL-FORMAT §10 | Phase 2 |
-| 3 | Wording of the two consent texts — legal, belongs to the business owner | FUNCTIONAL-SPEC §12 | Phase 1 |
 | 4 | Pricing model — deliberately deferred until a real client asks | Plan §12.2 | Phase 5 |
 | 5 | Which POS the second adapter supports — not decided until a real client asks | Plan §12.3 | Phase 5 |
-| 6 | Idempotency on `POST /miembros/{id}/canjes` — a lost response and a retry could double-write a `Canje`; no key exists on `RegistrarCanjeRequest` today | REST-CONTRACT-F1, FLOW-S2-S5 §3.8 | Phase 1, `F1-07` |
 
-**Nothing on this list blocks phase 0.**
+**Nothing on this list blocks phase 0.** Former items 3 (consent wording) and 6 (canje
+idempotency) were resolved by the owner 2026-08-19 — see "Decisions already taken" below. Their
+numbers are retired rather than reused, since `REST-CONTRACT-F1.md` and `openapi-fase1.yaml`
+already point at "decision #6" by that number.
 
 ## Decisions already taken
 
@@ -83,6 +84,8 @@ All of the below were decided 2026-08-12 unless noted.
 | Cashier session | **Full login per shift**, no short auto-lock. Trade-off accepted by the owner | FUNCTIONAL-SPEC §13 |
 | Member of another branch | Found and served normally — the program is one and the target is global (RN-07) | FUNCTIONAL-SPEC §13 |
 | What `Corte.Fecha` means | **The date up to which sales data has been loaded, advancing on every import** — not a fixed program-start date. One row per business holds the current value only; the history of every past cutoff lives in `LoteImportacion.CorteDeclarado`, not in a column of its own. Corrects a reading found while writing `F1-02` and resolved the same day | DATA-MODEL §4, decided 2026-08-18 |
+| Wording of the two consent texts (former open decision #3) | **Both approved, provisional until production.** `DatosPersonales` and `DatosSensibles` texts carry `[RAZÓN SOCIAL]`, `CUIT` and (for `DatosPersonales`) `[DOMICILIO]` placeholders resolved from the acting `Negocio`'s own data at render time — never a business literal in code. The asymmetry in the wording is enforced, not cosmetic: `DatosPersonales` says alta is impossible without it (mandatory, alta rejected without a granted consent); `DatosSensibles` says alta and membership are possible without it and it is revocable any time with no effect on the account (optional, alta accepted without it, revocation never touches balance or points) | FUNCTIONAL-SPEC §7/§12, decided 2026-08-19 |
+| Idempotency on `POST /miembros/{id}/canjes` (former open decision #6) | **Client-generated `ClaveIdempotencia`, one per redemption attempt**, carried on `RegistrarCanjeRequest`. A retry with the same key and the same member/amount/date/reason returns the original `CanjeResponse`, no second `Canje`; the same key with different data is rejected (`409 CLAVE_IDEMPOTENCIA_REUTILIZADA`). The guarantee against two simultaneous identical retries lives in a unique partial index on `(NegocioId, ClaveIdempotencia)`, not only in a check before the insert | REST-CONTRACT-F1, decided 2026-08-19 |
 
 ### Technical
 

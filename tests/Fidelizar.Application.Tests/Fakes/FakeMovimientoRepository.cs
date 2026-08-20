@@ -1,5 +1,6 @@
 using System.Reflection;
 using Fidelizar.Domain.Entities;
+using Fidelizar.Domain.Exceptions;
 using Fidelizar.Domain.Repositories;
 
 namespace Fidelizar.Application.Tests.Fakes;
@@ -47,6 +48,11 @@ public sealed class FakeMovimientoRepository : IMovimientoRepository
     public Task<MovimientoCredito?> GetByIdAsync(int negocioId, long id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_movimientos.FirstOrDefault(m => m.NegocioId == negocioId && m.Id == id));
 
+    public Task<MovimientoCredito?> GetPorClaveIdempotenciaAsync(
+        int negocioId, string claveIdempotencia, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_movimientos.FirstOrDefault(
+            m => m.NegocioId == negocioId && m.ClaveIdempotencia == claveIdempotencia));
+
     public Task<IReadOnlyList<MovimientoCredito>> GetPorFechaEfectivaYTipoAsync(
         int negocioId, DateOnly fechaEfectiva, TipoMovimientoCredito tipo, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<MovimientoCredito>>(_movimientos
@@ -54,8 +60,23 @@ public sealed class FakeMovimientoRepository : IMovimientoRepository
             .OrderBy(m => m.RegistradoEn)
             .ToList());
 
+    /// <summary>
+    /// Mirrors the real repository's contract exactly (<c>MovimientoRepository.AppendAsync</c>):
+    /// a second insert under a <c>ClaveIdempotencia</c> already on record throws
+    /// <see cref="ConflictException"/>, standing in for the database's unique partial index on
+    /// <c>(NegocioId, ClaveIdempotencia)</c> — so <c>SaldoServiceTests</c> can exercise the real
+    /// lost-the-race path with no database at hand.
+    /// </summary>
     public Task<MovimientoCredito> AppendAsync(MovimientoCredito movimiento, CancellationToken cancellationToken = default)
     {
+        if (movimiento.ClaveIdempotencia is not null && _movimientos.Any(
+            m => m.NegocioId == movimiento.NegocioId && m.ClaveIdempotencia == movimiento.ClaveIdempotencia))
+        {
+            throw new ConflictException(
+                "Ya existe un canje registrado con esta clave de idempotencia.",
+                "CLAVE_IDEMPOTENCIA_EN_USO");
+        }
+
         IdProperty.SetValue(movimiento, _nextId++);
         _movimientos.Add(movimiento);
         return Task.FromResult(movimiento);

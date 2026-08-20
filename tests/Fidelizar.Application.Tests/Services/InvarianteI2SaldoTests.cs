@@ -82,7 +82,7 @@ public class InvarianteI2SaldoTests
                 {
                     var request = new RegistrarCanjeRequest(
                         NegocioId, MiembroId, montoCanje, "Canje generado para la prueba de propiedad I2",
-                        UsuarioId: null, Fecha, Fecha);
+                        UsuarioId: null, Fecha, Fecha, ClaveIdempotencia: $"i2-trial-{random.Next(int.MaxValue)}");
                     await servicio.RegistrarCanjeAsync(request);
                 }
                 catch (ValidationException)

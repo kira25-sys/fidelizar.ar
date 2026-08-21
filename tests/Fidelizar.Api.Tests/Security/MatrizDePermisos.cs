@@ -114,7 +114,7 @@ public static class MatrizDePermisos
         // S8 Anular movimiento
         new("POST", "/api/movimientos/77/anular", "api/movimientos/{movimientoId:long}/anular",
             PoliticaEsperada.EncargadaOrAbove, RequiereAntiforgery: true,
-            new AnularRequest("Error de tipeo en el mostrador")),
+            new AnularRequest("Error de tipeo en el mostrador", "matriz-de-permisos-anular")),
 
         // S9 Cierre diario
         new("GET", $"/api/sucursales/{SucursalDelPersonal}/cierre-diario?fecha=2026-08-21",

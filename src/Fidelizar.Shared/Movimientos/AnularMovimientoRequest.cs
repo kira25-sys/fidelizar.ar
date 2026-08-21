@@ -11,10 +11,11 @@ namespace Fidelizar.Shared.Movimientos;
 /// decision #6, extended to this endpoint 2026-08-21). Without it a dropped connection cannot be
 /// told apart from a lost response, and the retry writes a second <c>Ajuste</c>.</summary>
 public sealed record AnularMovimientoRequest(
-    [property: Required(ErrorMessage = "El motivo es obligatorio.")]
+    [Required(ErrorMessage = "El motivo es obligatorio.")]
     string Motivo,
-    // property: is not decoration — an attribute on a positional parameter lands on the parameter,
-    // and MVC's model metadata never reads it, so without the target these annotations do nothing.
-    [property: Required(ErrorMessage = "La clave de idempotencia es obligatoria.")]
-    [property: StringLength(100, ErrorMessage = "La clave de idempotencia no puede superar los 100 caracteres.")]
+    // No `property:` target: MVC binds a positional record through its constructor and reads
+    // validation metadata off the parameter. Moving these to the property makes it throw on every
+    // request to this endpoint.
+    [Required(ErrorMessage = "La clave de idempotencia es obligatoria.")]
+    [StringLength(100, ErrorMessage = "La clave de idempotencia no puede superar los 100 caracteres.")]
     string ClaveIdempotencia);

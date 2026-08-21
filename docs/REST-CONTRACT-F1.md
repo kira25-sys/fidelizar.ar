@@ -246,12 +246,19 @@ the index was already there.
 All of them carry only data and, where relevant, `System.ComponentModel.DataAnnotations`
 attributes — no entities, no EF, no business rules (ARCHITECTURE §3). The attributes exist to give
 staff a fast Spanish message; the real enforcement is server-side in `Domain`/`Application`
-regardless. On a positional `record` those attributes need an explicit `[property: ...]` target:
-without it the attribute lands on the constructor *parameter*, where MVC's model metadata never
-looks, and the only validation left is the implicit "non-nullable reference type" check — which
-accepts an empty string. `AnularMovimientoRequest` uses the target for that reason; the older DTOs
-do not, which is why every one of these rules is also enforced in `Application` and is not
-weakened by the omission. Every Application-level command/result type that pairs with one of these (e.g.
+regardless. **On a positional `record` the attribute must NOT carry a `[property: ...]` target.** MVC binds a
+positional record through its constructor and reads validation metadata off the *parameter*, which
+is exactly where a bare attribute lands. Moving it to the property makes MVC throw
+`InvalidOperationException` while building the model metadata — *"validation metadata defined on
+property X that will be ignored"* — and **every request to that endpoint answers 500**.
+
+This is written down because it was measured the hard way on 2026-08-21: inspecting
+`GetMetadataForProperties` shows the parameter's attributes as absent, which reads like proof that
+the annotations are inert. They are not — they live on `BoundConstructorParameters`. Acting on the
+wrong reading added `[property: ...]` to `AnularMovimientoRequest` and broke `POST
+/api/movimientos/{id}/anular` with a 500 on every call. **F1-15's permission matrix is what caught
+it**, because it is the only suite that posts to that route through the real pipeline; the
+controller-level test passed, since calling the action directly skips model binding entirely. Every Application-level command/result type that pairs with one of these (e.g.
 `Fidelizar.Application.Services.AnularMovimientoRequest`, distinct from the `Shared` one of the
 same name) lives in `Fidelizar.Application`, never in `Shared`, because `Fidelizar.Application`
 cannot reference `Fidelizar.Shared` (ARCHITECTURE §3) — the same pattern `RegistrarCanjeRequest`

@@ -5,6 +5,7 @@ using Fidelizar.Api.Options;
 using Fidelizar.Infrastructure.Configurations;
 using Fidelizar.Infrastructure.Persistence;
 using Fidelizar.Shared.Errors;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Serilog;
@@ -44,7 +45,27 @@ public class Program
             builder.Services.AddAppAuthentication(builder.Configuration);
             builder.Services.AddAppAntiforgery();
 
-            builder.Services.AddControllers();
+            builder.Services
+                .AddControllers()
+                // Model-binding failures bypass ExceptionHandlingMiddleware — MVC short-circuits
+                // before the action throws — so without this they answer the framework's
+                // ProblemDetails instead of the one error shape every endpoint uses
+                // (REST-CONTRACT-F1.md). The client parses ErrorResponse, so the cashier would
+                // read a generic message instead of the Spanish one the DataAnnotation carries.
+                .ConfigureApiBehaviorOptions(options =>
+                    options.InvalidModelStateResponseFactory = contexto =>
+                    {
+                        var error = new ErrorResponse(
+                            "VALIDACION_INVALIDA", "Revisá los datos ingresados.");
+
+                        error.AddDetails(
+                            contexto.ModelState
+                                .Where(entrada => entrada.Value?.Errors.Count > 0)
+                                .SelectMany(entrada => entrada.Value!.Errors.Select(
+                                    e => (entrada.Key, e.ErrorMessage))));
+
+                        return new BadRequestObjectResult(error);
+                    });
 
             var app = builder.Build();
 

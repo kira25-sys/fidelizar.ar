@@ -5,6 +5,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      FidelizarDbContextFactory's design-time helpers are internal: nothing at runtime may build
+      configuration behind the composition root's back. The tests need them to prove the factory
+      and Fidelizar.Api read the same secret store (2026-08-20), same pattern as Domain.csproj.
+    -->
+    <InternalsVisibleTo Include="Fidelizar.Infrastructure.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -36,6 +45,18 @@
       Usuario as its own lean entity, not the generic Identity user shape.
     -->
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.9" />
+    <!--
+      Task-authorized 2026-08-20 (nuget.org, MIT, both first-party .NET extensions packages):
+      the two configuration providers FidelizarDbContextFactory needs so that "dotnet ef" reads
+      the connection string from the same places the running API does — user secrets, then
+      environment variables. Before this, the factory read one environment variable and nothing
+      else, which is how tooling and app came to point at different databases.
+      Microsoft.Extensions.Configuration itself is already in the graph transitively; only the
+      two providers were missing. Pinned to 10.0.9 to match that transitive version and the
+      Identity.Core reference above, so no MSB3277 conflict appears.
+    -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.9" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.9" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -30,7 +30,7 @@ nunca) y los DNI están en el rango 99.000.000 que jamás se emitió. Ver
 | `Corte` | 1 |
 | `Miembro` | 6, con `NombreNormalizado` para que S2 los encuentre |
 | `Consentimiento` | 1 por socio, `DatosPersonales`, otorgado |
-| `MovimientoCredito` | 10: `SaldoInicial`, `Canje` y un `Ajuste` |
+| `MovimientoCredito` | 11: 6 `SaldoInicial` (uno por socio), 4 `Canje` y 1 `Ajuste` |
 
 Los saldos resultantes van de $0 a $10.800, así que S2 y S3 tienen casos distintos que mostrar
 (incluido un socio en $0, que es el que S4 tiene que negarse a canjear — RN-24).

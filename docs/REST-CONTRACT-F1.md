@@ -36,6 +36,8 @@ consent texts were approved (README open decision #3) — see the note at the en
 | S9 Cierre diario | `/api/sucursales/{id}/cierre-diario` | GET | `EncargadaOrAbove` | **Implemented** | `ICierreDiarioService` |
 | S10 Usuarios | `/api/usuarios` | GET / POST | `DuenoOnly` | **Implemented** | `IUsuarioService` |
 | S10 Sucursales | `/api/sucursales` | GET / POST | `DuenoOnly` | **Implemented** | `ISucursalService` |
+| F1-14 Socios sin vincular | `/api/miembros/sin-vincular` | GET | `EncargadaOrAbove` | **Implemented** | `IVinculacionMiembroService.ListarSinVincularAsync` |
+| F1-14 Socios sin vincular | `/api/miembros/{id}/vinculacion` | POST | `EncargadaOrAbove` | **Implemented** | `IVinculacionMiembroService.VincularAsync` |
 
 Every state-changing route (`POST`) requires the `X-CSRF-TOKEN` header from
 `GET /api/auth/csrf-token` (`AntiforgeryTokenRequiredAttribute`, ARCHITECTURE §8). Every route
@@ -165,6 +167,40 @@ from the token, never from the URL or the body.
   / `.DatosSensiblesVersion`), never the resolved text — the design `feat/f1-08-consentimiento`
   already established, kept unchanged here.
 
+## F1-14 Socios sin vincular — implemented 2026-08-21
+
+A member registered at the counter (S5) carries no `ClienteExternoId`, so when sales are imported
+in phase 2 nothing accrues to it (DATA-MODEL §3). These two endpoints are what stops that from
+happening silently.
+
+**`GET /api/miembros/sin-vincular`** lists the members of the acting user's business that still
+have no `ClienteExternoId`, oldest first. It never returns phone or DNI: linking a POS id needs
+neither, and `Shared` is compiled into the browser.
+
+**`POST /api/miembros/{id}/vinculacion`** records the link. Its rejections:
+
+| Case | Answer |
+| --- | --- |
+| Blank or missing id | `400 CLIENTE_EXTERNO_ID_REQUERIDO` |
+| Member does not exist **or belongs to another business** | `404` — the same answer for both, so the response never reveals that the id exists elsewhere (I8) |
+| This member already carries an id | `409 MIEMBRO_YA_VINCULADO` |
+| Another member of this business already claims that id | `409 CLIENTE_EXTERNO_ID_DUPLICADO` |
+
+Neither `409` depends on a check-then-write, because both races are closed by the write itself:
+
+- **Two requests linking the same member.** The update carries its own
+  `ClienteExternoId IS NULL` predicate, so the loser updates 0 rows instead of overwriting the
+  winner's id, and that becomes `MIEMBRO_YA_VINCULADO`.
+- **Two requests claiming the same id for different members.** The **partial unique index** on
+  `(NegocioId, ClienteExternoId)` that `MiembroConfiguration` already declared is what refuses
+  the second one; the repository recognises that constraint by name and translates it to
+  `CLIENTE_EXTERNO_ID_DUPLICADO`.
+
+So a concurrent caller gets the same answer a sequential one would, and no migration was needed —
+the index was already there.
+
+**The screen is not built here** — this is the backend half of F1-14.
+
 ## DTOs added to `Fidelizar.Shared`
 
 | Namespace | Type | Screen |
@@ -179,6 +215,8 @@ from the token, never from the URL or the body.
 | `Fidelizar.Shared.Sucursales` | `CierreDiarioResponse` / `CierreDiarioMovimiento` | S9 |
 | `Fidelizar.Shared.Sucursales` | `SucursalResponse` / `CrearSucursalRequest` | S10 |
 | `Fidelizar.Shared.Usuarios` | `UsuarioResponse` / `CrearUsuarioRequest` | S10 |
+| `Fidelizar.Shared.Miembros` | `MiembroSinVincularResponse` | F1-14 |
+| `Fidelizar.Shared.Miembros` | `VincularClienteExternoRequest` / `VinculacionClienteExternoResponse` | F1-14 |
 
 All of them carry only data and, where relevant, `System.ComponentModel.DataAnnotations`
 attributes — no entities, no EF, no business rules (ARCHITECTURE §3). The attributes exist to give

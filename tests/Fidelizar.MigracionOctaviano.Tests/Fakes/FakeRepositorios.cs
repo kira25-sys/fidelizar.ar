@@ -82,6 +82,34 @@ public sealed class FakeMiembroRepository : IMiembroRepository
         _miembros.Add(miembro);
         return Task.FromResult(miembro);
     }
+
+    // Also not exercised by the migrator — F1-14's two methods, minimal and correct.
+    public Task<IReadOnlyList<Miembro>> ListarSinVincularAsync(
+        int negocioId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Miembro>>(_miembros
+            .Where(m => m.NegocioId == negocioId && m.ClienteExternoId is null)
+            .OrderBy(m => m.FechaAlta)
+            .ToList());
+
+    public Task<bool> VincularClienteExternoAsync(
+        int negocioId,
+        int miembroId,
+        string clienteExternoId,
+        DateTime ahoraUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var miembro = _miembros.FirstOrDefault(
+            m => m.NegocioId == negocioId && m.Id == miembroId && m.ClienteExternoId is null);
+
+        if (miembro is null)
+        {
+            return Task.FromResult(false);
+        }
+
+        typeof(Miembro).GetProperty(nameof(Miembro.ClienteExternoId))!.SetValue(miembro, clienteExternoId);
+        typeof(Miembro).GetProperty(nameof(Miembro.ActualizadoEn))!.SetValue(miembro, ahoraUtc);
+        return Task.FromResult(true);
+    }
 }
 
 public sealed class FakeMovimientoRepository : IMovimientoRepository

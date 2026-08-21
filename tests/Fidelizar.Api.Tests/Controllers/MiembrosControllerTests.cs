@@ -37,6 +37,7 @@ public class MiembrosControllerTests
         FakeHistorialMovimientosService? historialMovimientosService = null,
         FakeAltaMiembroService? altaMiembroService = null,
         FakeConsentimientoTextoService? consentimientoTextoService = null,
+        FakeVinculacionMiembroService? vinculacionMiembroService = null,
         string rol = "Cajero")
     {
         var controller = new MiembrosController(
@@ -47,7 +48,8 @@ public class MiembrosControllerTests
             fichaCompletaService ?? new FakeFichaCompletaService(),
             historialMovimientosService ?? new FakeHistorialMovimientosService(),
             altaMiembroService ?? new FakeAltaMiembroService(),
-            consentimientoTextoService ?? new FakeConsentimientoTextoService());
+            consentimientoTextoService ?? new FakeConsentimientoTextoService(),
+            vinculacionMiembroService ?? new FakeVinculacionMiembroService());
 
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
         [
@@ -294,6 +296,59 @@ public class MiembrosControllerTests
         Assert.Equal("TIPO_CONSENTIMIENTO_INVALIDO", ex.ErrorCode);
     }
 
+    [Fact]
+    public async Task ListarSinVincular_usa_el_NegocioId_del_token_y_no_devuelve_telefono_ni_dni()
+    {
+        var vinculacionService = new FakeVinculacionMiembroService
+        {
+            SinVincularARetornar =
+            [
+                new MiembroSinVincularResultado(MiembroId, "Socia De Mostrador", "0142", new DateOnly(2026, 8, 19), 2),
+            ],
+        };
+        var controller = CrearControlador(vinculacionMiembroService: vinculacionService, rol: "Encargada");
+
+        var resultado = await controller.ListarSinVincular(CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(resultado);
+        var respuesta = Assert.IsType<List<MiembroSinVincularResponse>>(ok.Value);
+        Assert.Single(respuesta);
+        Assert.Equal(MiembroId, respuesta[0].Id);
+        Assert.Equal(new DateOnly(2026, 8, 19), respuesta[0].FechaAlta);
+
+        // I8: el NegocioId sale del token, nunca de la URL ni del cuerpo.
+        Assert.Equal(NegocioId, vinculacionService.NegocioIdRecibido);
+
+        // Nada personal más allá de lo que el rol necesita para vincular (ARCHITECTURE §9).
+        var propiedades = typeof(MiembroSinVincularResponse).GetProperties().Select(p => p.Name).ToArray();
+        Assert.DoesNotContain("Telefono", propiedades);
+        Assert.DoesNotContain("Dni", propiedades);
+    }
+
+    [Fact]
+    public async Task VincularClienteExterno_propaga_NegocioId_y_UsuarioId_del_token_al_servicio()
+    {
+        var vinculacionService = new FakeVinculacionMiembroService
+        {
+            ResultadoARetornar = new VinculacionResultado(
+                MiembroId, "Socia De Mostrador", "POS-100", new DateTime(2026, 8, 21, 12, 0, 0, DateTimeKind.Utc)),
+        };
+        var controller = CrearControlador(vinculacionMiembroService: vinculacionService, rol: "Encargada");
+
+        var resultado = await controller.VincularClienteExterno(
+            MiembroId, new VincularClienteExternoRequest("POS-100"), CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(resultado);
+        var respuesta = Assert.IsType<VinculacionClienteExternoResponse>(ok.Value);
+        Assert.Equal("POS-100", respuesta.ClienteExternoId);
+
+        Assert.NotNull(vinculacionService.UltimaSolicitud);
+        Assert.Equal(NegocioId, vinculacionService.UltimaSolicitud!.NegocioId);
+        Assert.Equal(MiembroId, vinculacionService.UltimaSolicitud.MiembroId);
+        Assert.Equal(UsuarioId, vinculacionService.UltimaSolicitud.UsuarioId);
+        Assert.Equal("POS-100", vinculacionService.UltimaSolicitud.ClienteExternoId);
+    }
+
     [Theory]
     [InlineData(nameof(MiembrosController.ObtenerSaldo))]
     [InlineData(nameof(MiembrosController.RegistrarCanje))]
@@ -303,6 +358,8 @@ public class MiembrosControllerTests
     [InlineData(nameof(MiembrosController.HistorialMovimientos))]
     [InlineData(nameof(MiembrosController.RegistrarAlta))]
     [InlineData(nameof(MiembrosController.ObtenerConsentimientoTexto))]
+    [InlineData(nameof(MiembrosController.ListarSinVincular))]
+    [InlineData(nameof(MiembrosController.VincularClienteExterno))]
     public void Cada_accion_exige_una_policy_de_autorizacion(string nombreAccion)
     {
         var metodo = typeof(MiembrosController).GetMethod(nombreAccion)!;
@@ -316,7 +373,9 @@ public class MiembrosControllerTests
     [Theory]
     [InlineData(nameof(MiembrosController.FichaCompleta))]
     [InlineData(nameof(MiembrosController.HistorialMovimientos))]
-    public void S6_y_S7_exigen_EncargadaOrAbove_explicitamente(string nombreAccion)
+    [InlineData(nameof(MiembrosController.ListarSinVincular))]
+    [InlineData(nameof(MiembrosController.VincularClienteExterno))]
+    public void S6_S7_y_F1_14_exigen_EncargadaOrAbove_explicitamente(string nombreAccion)
     {
         var metodo = typeof(MiembrosController).GetMethod(nombreAccion)!;
 
@@ -329,6 +388,7 @@ public class MiembrosControllerTests
     [Theory]
     [InlineData(nameof(MiembrosController.RegistrarCanje))]
     [InlineData(nameof(MiembrosController.RegistrarAlta))]
+    [InlineData(nameof(MiembrosController.VincularClienteExterno))]
     public void Cada_POST_exige_token_antifalsificacion(string nombreAccion)
     {
         var metodo = typeof(MiembrosController).GetMethod(nombreAccion)!;

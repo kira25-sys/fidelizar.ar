@@ -14,7 +14,21 @@ public sealed class FakeMiembroRepository : IMiembroRepository
 {
     private static readonly PropertyInfo IdProperty = typeof(Miembro).GetProperty(nameof(Miembro.Id))!;
 
+    private static readonly PropertyInfo ClienteExternoIdProperty =
+        typeof(Miembro).GetProperty(nameof(Miembro.ClienteExternoId))!;
+
+    private static readonly PropertyInfo ActualizadoEnProperty =
+        typeof(Miembro).GetProperty(nameof(Miembro.ActualizadoEn))!;
+
     private readonly List<Miembro> _miembros = [];
+
+    /// <summary>Test-only: makes the next <see cref="VincularClienteExternoAsync"/> report that it
+    /// linked nothing, standing in for a concurrent request that linked the member first.</summary>
+    public bool SimularVinculacionPerdida { get; set; }
+
+    /// <summary>Test-only: what <see cref="VincularClienteExternoAsync"/> was last asked to
+    /// write, so a test can prove the trimmed id reached the repository.</summary>
+    public string? UltimoClienteExternoIdVinculado { get; private set; }
 
     public IReadOnlyList<Miembro> Miembros => _miembros;
 
@@ -69,5 +83,45 @@ public sealed class FakeMiembroRepository : IMiembroRepository
         IdProperty.SetValue(miembro, _miembros.Count == 0 ? 1 : _miembros.Max(m => m.Id) + 1);
         _miembros.Add(miembro);
         return Task.FromResult(miembro);
+    }
+
+    public Task<IReadOnlyList<Miembro>> ListarSinVincularAsync(
+        int negocioId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Miembro>>(_miembros
+            .Where(m => m.NegocioId == negocioId && m.ClienteExternoId is null)
+            .OrderBy(m => m.FechaAlta)
+            .ThenBy(m => m.Id)
+            .ToList());
+
+    /// <summary>
+    /// Mirrors the real repository's <c>ClienteExternoId IS NULL</c> guard, including its return
+    /// value: <c>false</c> means nothing was linked, which is the signal
+    /// <c>VinculacionMiembroService</c> turns into <c>MIEMBRO_YA_VINCULADO</c>.
+    /// </summary>
+    public Task<bool> VincularClienteExternoAsync(
+        int negocioId,
+        int miembroId,
+        string clienteExternoId,
+        DateTime ahoraUtc,
+        CancellationToken cancellationToken = default)
+    {
+        UltimoClienteExternoIdVinculado = clienteExternoId;
+
+        if (SimularVinculacionPerdida)
+        {
+            return Task.FromResult(false);
+        }
+
+        var miembro = _miembros.SingleOrDefault(
+            m => m.NegocioId == negocioId && m.Id == miembroId && m.ClienteExternoId is null);
+
+        if (miembro is null)
+        {
+            return Task.FromResult(false);
+        }
+
+        ClienteExternoIdProperty.SetValue(miembro, clienteExternoId);
+        ActualizadoEnProperty.SetValue(miembro, ahoraUtc);
+        return Task.FromResult(true);
     }
 }

@@ -1,0 +1,41 @@
+# Local Postgres for day-to-day development: running the API, opening the screens in a browser,
+# and applying migrations forward and back. Development only — nothing here is deployed anywhere.
+#
+# Deliberately NOT compose.gate.yml. That one holds the phase 0 gate database with the 293 real
+# members' balances (ROADMAP F0-11); a development playground must never share a volume with it.
+# Different container name, different port (5434, not 5433), different volume, different database.
+#
+# CLAUDE.md: a container definition references secrets, it never contains them. The password is
+# read from FIDELIZAR_DEV_PG_PASSWORD in the owner's environment and there is deliberately no
+# default — compose fails with a clear error when it is unset, which is the correct outcome.
+#
+#   $env:FIDELIZAR_DEV_PG_PASSWORD = "..."       # PowerShell, in the owner's session only
+#   docker compose -f compose.dev.yml up -d
+#
+# To start over from an empty database:
+#
+#   docker compose -f compose.dev.yml down -v
+
+services:
+  dev-db:
+    image: postgres:17
+    container_name: fidelizar-dev-db
+    environment:
+      POSTGRES_DB: fidelizar_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${FIDELIZAR_DEV_PG_PASSWORD:?set FIDELIZAR_DEV_PG_PASSWORD in your environment first}
+    ports:
+      - "5434:5432"
+    volumes:
+      - dev-data:/var/lib/postgresql/data
+    healthcheck:
+      # The API applies EF Core migrations on start and connects the moment the port opens, but
+      # Postgres accepts TCP before it is ready to serve. Without this the first run can fail on
+      # a race that looks like a bug.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fidelizar_dev"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  dev-data:

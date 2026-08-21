@@ -13,6 +13,7 @@ Read in this order. Each one assumes the ones above it.
 | [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) | Colours, type scale, control sizes, states, hover, keyboard, breakpoints, light/dark, and why — with [`../src/Fidelizar.Client/wwwroot/css/tokens.css`](../src/Fidelizar.Client/wwwroot/css/tokens.css) as the CSS to load | What `F1-02` and every screen task build from |
 | [FLOW-S2-S5.md](FLOW-S2-S5.md) | S2–S5 flow by flow: every state, every unhappy path, the exact Spanish copy — the homonym case and the stale-data warning in full | What `F1-05` through `F1-09` build from |
 | [ROADMAP.md](ROADMAP.md) | The work, phase by phase, task by task, with gates | Sequencing |
+| [DESARROLLO-LOCAL.md](DESARROLLO-LOCAL.md) | Setting up a working machine: the dev Postgres on 5434, the two user-secrets values, and why a persistent environment variable is dangerous | Not a contract — how to run it locally |
 
 > ARCHITECTURE §15 records what is ported from the university project `Dsw2026Tpi` and, just as
 > importantly, what is not.

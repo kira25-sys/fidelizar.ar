@@ -1,0 +1,318 @@
+@* S8 Anular movimiento (FUNCTIONAL-SPEC §8) — a native <dialog> over S7's table. Nothing here
+   edits or deletes: confirming appends an Ajuste of the opposite amount and both rows stay in the
+   ledger (I1). The wording says exactly that, on purpose. *@
+@using Fidelizar.Client.Api
+@using Fidelizar.Client.Formatting
+@using Fidelizar.Shared.Movimientos
+@using System.Net
+@inject IApiClient ApiClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<dialog class="anular" @ref="_dialogo" @onclose="AlCerrar" aria-labelledby="anular-titulo">
+    <form method="dialog" class="anular__cerrar-form">
+        <button type="submit" class="anular__cerrar" aria-label="Cerrar">×</button>
+    </form>
+
+    <h2 id="anular-titulo" class="anular__titulo">Anular movimiento</h2>
+
+    @if (Movimiento is not null)
+    {
+        <p class="anular__explicacion">
+            Este movimiento no se borra ni se modifica. Se registra un <strong>ajuste</strong> que lo
+            compensa, y las dos líneas quedan a la vista en el historial.
+        </p>
+
+        <div class="anular__resumen">
+            <dl class="anular__datos">
+                <div class="anular__dato">
+                    <dt>Movimiento</dt>
+                    <dd>
+                        <span class="badge @MovimientoFormatter.ClaseBadgeTipo(Movimiento.Tipo)">
+                            @MovimientoFormatter.EtiquetaTipo(Movimiento.Tipo)
+                        </span>
+                        <span class="amount">@MovimientoFormatter.MontoConSigno(Movimiento.Monto)</span>
+                    </dd>
+                </div>
+                <div class="anular__dato">
+                    <dt>Fecha efectiva</dt>
+                    <dd>@FechaFormatter.Corta(Movimiento.FechaEfectiva)</dd>
+                </div>
+                <div class="anular__dato">
+                    <dt>Motivo original</dt>
+                    <dd>@(string.IsNullOrWhiteSpace(Movimiento.Motivo) ? "—" : Movimiento.Motivo)</dd>
+                </div>
+                <div class="anular__dato anular__dato--destacado">
+                    <dt>Se va a registrar</dt>
+                    <dd>
+                        <span class="badge badge--warning">Ajuste</span>
+                        <span class="amount">
+                            @MovimientoFormatter.MontoConSigno(MovimientoFormatter.MontoDelAjuste(Movimiento.Monto))
+                        </span>
+                        <span class="anular__hoy">con fecha de hoy</span>
+                    </dd>
+                </div>
+            </dl>
+        </div>
+    }
+
+    @if (_banner is not null)
+    {
+        <div class="anular__banner anular__banner--@(_banner.Tono)" role="alert" tabindex="-1" @ref="_bannerRef">
+            <p>@_banner.Mensaje</p>
+            @if (_banner.OfreceIngresar)
+            {
+                <button type="button" class="btn btn--secondary" @onclick="IrAIngresar">Iniciar sesión</button>
+            }
+            @if (_banner.OfreceRevisar)
+            {
+                <button type="button" class="btn btn--secondary" @onclick="RevisarHistorialAsync">
+                    Actualizar el historial
+                </button>
+            }
+        </div>
+    }
+
+    @* Deliberately not a <form>: a lone text input inside one submits on Enter, and an Enter that
+       voids a movement is the exact reflex DESIGN-SYSTEM §9.2 exists to prevent. Anular is only
+       ever reached by activating its own button. *@
+    <div class="anular__cuerpo">
+        <div class="field">
+            <label for="anular-motivo">Motivo de la anulación</label>
+            <input
+                id="anular-motivo"
+                class="input"
+                type="text"
+                maxlength="200"
+                autocomplete="off"
+                @bind="_motivo"
+                @bind:event="oninput"
+                @ref="_motivoInput"
+                aria-required="true"
+                aria-invalid="@(_errorMotivo is null ? "false" : "true")"
+                aria-describedby="anular-motivo-ayuda @(_errorMotivo is null ? "" : "anular-motivo-error")" />
+            <span id="anular-motivo-ayuda" class="anular__ayuda">
+                Obligatorio. Queda registrado en el historial junto con tu nombre.
+            </span>
+            @if (_errorMotivo is not null)
+            {
+                <span id="anular-motivo-error" class="field-error">@_errorMotivo</span>
+            }
+        </div>
+
+        @* Cancelar first in the DOM, and focus lands on it when the dialog opens: on a
+           destructive confirm the reflex Enter must cancel, never void (DESIGN-SYSTEM §9.2). *@
+        <div class="anular__acciones">
+            <button type="button" class="btn btn--secondary" @onclick="CerrarAsync" @ref="_cancelarBoton">
+                Cancelar
+            </button>
+            <button
+                type="button"
+                class="btn btn--danger"
+                @onclick="ConfirmarAsync"
+                disabled="@NoSePuedeConfirmar"
+                aria-disabled="@(NoSePuedeConfirmar ? "true" : "false")"
+                aria-busy="@(_enviando ? "true" : "false")">
+                Anular movimiento
+            </button>
+        </div>
+    </div>
+</dialog>
+
+@code {
+    /// <summary>The row S7 was clicked from. Null until the dialog is opened for one.</summary>
+    [Parameter] public MovimientoResponse? Movimiento { get; set; }
+
+    /// <summary>Fires on a 200, carrying the Ajuste the server appended — S7 reloads the
+    /// ledger from it.</summary>
+    [Parameter] public EventCallback<MovimientoResponse> OnAnulado { get; set; }
+
+    /// <summary>Fires when the outcome of the call is genuinely unknown (the connection dropped
+    /// with the request in flight). S7 reloads so the manager can see for herself whether the
+    /// Ajuste got written — this endpoint carries no idempotency key, so a blind retry is how a
+    /// movement gets voided twice.</summary>
+    [Parameter] public EventCallback OnRevisarHistorial { get; set; }
+
+    /// <summary>Fires when the dialog closes, whatever closed it — S7 returns focus to the
+    /// button that opened it (DESIGN-SYSTEM §9.2).</summary>
+    [Parameter] public EventCallback OnCerrado { get; set; }
+
+    private ElementReference _dialogo;
+    private ElementReference _motivoInput;
+    private ElementReference _cancelarBoton;
+    private ElementReference _bannerRef;
+    private IJSObjectReference? _modulo;
+
+    private string _motivo = string.Empty;
+    private string? _errorMotivo;
+    private Banner? _banner;
+    private bool _enviando;
+
+    // Set when the request went out and the answer never came back. Confirming again from this
+    // state could append a second Ajuste, so the button stays shut until the history is reloaded.
+    private bool _resultadoDesconocido;
+
+    private bool _focoAlCancelar;
+    private bool _focoAlBanner;
+    private bool _focoAlMotivo;
+
+    private bool NoSePuedeConfirmar => _enviando || _resultadoDesconocido || Movimiento is null;
+
+    private sealed record Banner(
+        string Mensaje, string Tono, bool OfreceIngresar = false, bool OfreceRevisar = false);
+
+    /// <summary>Opens the dialog for one movement, always with an empty reason: a reason typed
+    /// for a different row must never be carried over.</summary>
+    public async Task AbrirAsync()
+    {
+        _motivo = string.Empty;
+        _errorMotivo = null;
+        _banner = null;
+        _enviando = false;
+        _resultadoDesconocido = false;
+        _focoAlCancelar = true;
+
+        var modulo = await ObtenerModuloAsync();
+        await modulo.InvokeVoidAsync("abrirModal", _dialogo);
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focoAlCancelar)
+        {
+            _focoAlCancelar = false;
+            await _cancelarBoton.FocusAsync();
+        }
+        else if (_focoAlBanner)
+        {
+            _focoAlBanner = false;
+            await _bannerRef.FocusAsync();
+        }
+        else if (_focoAlMotivo)
+        {
+            _focoAlMotivo = false;
+            await _motivoInput.FocusAsync();
+        }
+    }
+
+    private async Task CerrarAsync()
+    {
+        var modulo = await ObtenerModuloAsync();
+        await modulo.InvokeVoidAsync("cerrar", _dialogo);
+    }
+
+    /// <summary>The single close path: Esc, the ×, Cancelar and a backdrop click all end here
+    /// through the native close event.</summary>
+    private async Task AlCerrar() => await OnCerrado.InvokeAsync();
+
+    private void IrAIngresar() => Navigation.NavigateTo("/ingreso");
+
+    private async Task RevisarHistorialAsync()
+    {
+        await CerrarAsync();
+        await OnRevisarHistorial.InvokeAsync();
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        // disabled in the markup is what stops a second Enter; this is the same guard on the
+        // handler, because a click and a key both land here (DESIGN-SYSTEM §9.5).
+        if (NoSePuedeConfirmar)
+        {
+            return;
+        }
+
+        var motivo = _motivo.Trim();
+        if (string.IsNullOrWhiteSpace(motivo))
+        {
+            _errorMotivo = "Escribí por qué anulás este movimiento.";
+            _focoAlMotivo = true;
+            StateHasChanged();
+            return;
+        }
+
+        _errorMotivo = null;
+        _enviando = true;
+        _banner = null;
+        StateHasChanged();
+
+        var resultado = await ApiClient.PostAsync<AnularMovimientoRequest, MovimientoResponse>(
+            $"api/movimientos/{Movimiento!.Id}/anular", new AnularMovimientoRequest(motivo));
+
+        _enviando = false;
+
+        if (resultado.Success)
+        {
+            var ajuste = resultado.Value;
+            await CerrarAsync();
+            await OnAnulado.InvokeAsync(ajuste);
+            return;
+        }
+
+        MostrarBanner(resultado.Problem!);
+    }
+
+    /// <summary>Server rejections. The reason keeps every character typed — a failed request
+    /// never empties a form (ARCHITECTURE §14).</summary>
+    private void MostrarBanner(ApiProblem problem)
+    {
+        // No idempotency key on this endpoint (openapi-fase1.yaml): when the connection drops we
+        // cannot tell "never arrived" from "arrived and the answer was lost", and guessing wrong
+        // in the retry direction writes a second Ajuste. So this state does not offer a retry.
+        _resultadoDesconocido = problem.IsOffline;
+
+        _banner = problem switch
+        {
+            { IsOffline: true } => new Banner(
+                "Se cortó la conexión y no podemos confirmar si la anulación quedó registrada. " +
+                "Actualizá el historial y fijate si ya aparece el ajuste antes de volver a intentar.",
+                "warning",
+                OfreceRevisar: true),
+
+            { ErrorCode: "MOTIVO_REQUERIDO" } => new Banner(
+                "El motivo es obligatorio: todo ajuste queda registrado con su explicación.",
+                "danger"),
+
+            { StatusCode: HttpStatusCode.NotFound } => new Banner(
+                "Ese movimiento ya no está disponible. Actualizá el historial para ver cómo quedó.",
+                "danger",
+                OfreceRevisar: true),
+
+            { StatusCode: HttpStatusCode.Forbidden } => new Banner(
+                "No tenés permiso para anular movimientos.",
+                "danger"),
+
+            { StatusCode: HttpStatusCode.Unauthorized } => new Banner(
+                "Tu sesión venció. Iniciá sesión de nuevo para continuar — no perdés lo que escribiste.",
+                "danger",
+                OfreceIngresar: true),
+
+            _ => new Banner(
+                "No pudimos anular el movimiento. Lo que escribiste sigue acá — probá de nuevo.",
+                "danger"),
+        };
+
+        _focoAlBanner = true;
+        StateHasChanged();
+    }
+
+    private async Task<IJSObjectReference> ObtenerModuloAsync() =>
+        _modulo ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/dialogo.js");
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_modulo is not null)
+        {
+            try
+            {
+                await _modulo.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The browser is already gone; nothing to release.
+            }
+        }
+    }
+}

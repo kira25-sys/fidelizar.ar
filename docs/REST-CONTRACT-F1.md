@@ -89,7 +89,8 @@ from the token, never from the URL or the body.
   another `NegocioId`, exactly like every other lookup, I8) and appends a new `Ajuste` of
   `-Monto`, dated the day the void happens, with the mandatory reason and the acting user from the
   JWT. `MovimientoCredito.Crear` is the only thing that ever validates `Motivo` — this service does
-  not duplicate that check, it just triggers it (I1, I3).
+  not duplicate that check, it just triggers it (I1, I3). **Idempotent on
+  `AnularMovimientoRequest.ClaveIdempotencia` since 2026-08-21** — see the section below.
 - **`SucursalesController.CierreDiario`** (`GET /api/sucursales/{id}/cierre-diario`, S9,
   `EncargadaOrAbove`) calls `ICierreDiarioService.ObtenerAsync`. A `Canje` carries no `SucursalId`
   of its own (DATA-MODEL §4 — branch is organisational, RN-07), so "this branch's redemptions"
@@ -128,6 +129,30 @@ from the token, never from the URL or the body.
   that specific Postgres unique-violation into the same `ConflictException`, which the service
   catches by re-reading the winner and returning it — a check-then-insert with no index behind it
   would leave exactly the race this decision exists to close.
+- **`MovimientosController.Anular`** (`POST /api/movimientos/{id}/anular`) is idempotent on the
+  same key, added 2026-08-21. PR #35 shipped S8 without one and said so: when the connection drops
+  the manager cannot tell "never arrived" from "arrived and the answer was lost", and retrying
+  writes a **second `Ajuste`** — money moved twice. S8 worked around it by refusing the retry and
+  offering to reload the history; this closes it the way S4 already had.
+  `IAnulacionMovimientoService.AnularAsync` rejects a missing or blank key
+  (`400 CLAVE_IDEMPOTENCIA_REQUERIDA`), then checks `GetPorClaveIdempotenciaAsync` before building
+  anything: a key already on record whose `Ajuste` voids the same movement with the same reason is
+  a retry and returns that `Ajuste` unchanged. A key already on record for a **different** void
+  throws `ConflictException("CLAVE_IDEMPOTENCIA_REUTILIZADA")` (409).
+  **No migration was needed**: `MovimientoCredito.ClaveIdempotencia` and the unique partial index
+  `IX_MovimientosCredito_NegocioId_ClaveIdempotencia` are defined over the whole ledger
+  (`WHERE "ClaveIdempotencia" IS NOT NULL`), not over `Canje` alone — so the same index that closes
+  S4's concurrent-retry race closes S8's, and `AnularAsync` recovers from the losing insert exactly
+  like `RegistrarCanjeAsync` does: catch the `ConflictException`, re-read the winner, return it.
+  The match is on the void's own shape — member, exact opposite amount, reason — because the ledger
+  stores no pointer from an `Ajuste` back to the row it corrects (DATA-MODEL §4). `FechaEfectiva`
+  is deliberately **not** compared: it is the server's own "today", and a retry that crosses
+  midnight is still the same attempt.
+  Client side, `AnularMovimientoDialog` generates one key per attempt and renews it whenever the
+  movement or the reason changes (`ClaveParaEsteIntento`, the same rule as
+  `RegistrarCanjeDialog`), so a corrected reason never collides with its own earlier attempt. With
+  the key in place the dialog's old "resultado desconocido" lock is gone: after a dropped
+  connection the manager can simply press again.
 - **Auth (S1)** — unchanged from F1-03/F1-04b.
 
 ## S5 Alta de socio — implemented 2026-08-19
@@ -221,7 +246,12 @@ the index was already there.
 All of them carry only data and, where relevant, `System.ComponentModel.DataAnnotations`
 attributes — no entities, no EF, no business rules (ARCHITECTURE §3). The attributes exist to give
 staff a fast Spanish message; the real enforcement is server-side in `Domain`/`Application`
-regardless. Every Application-level command/result type that pairs with one of these (e.g.
+regardless. On a positional `record` those attributes need an explicit `[property: ...]` target:
+without it the attribute lands on the constructor *parameter*, where MVC's model metadata never
+looks, and the only validation left is the implicit "non-nullable reference type" check — which
+accepts an empty string. `AnularMovimientoRequest` uses the target for that reason; the older DTOs
+do not, which is why every one of these rules is also enforced in `Application` and is not
+weakened by the omission. Every Application-level command/result type that pairs with one of these (e.g.
 `Fidelizar.Application.Services.AnularMovimientoRequest`, distinct from the `Shared` one of the
 same name) lives in `Fidelizar.Application`, never in `Shared`, because `Fidelizar.Application`
 cannot reference `Fidelizar.Shared` (ARCHITECTURE §3) — the same pattern `RegistrarCanjeRequest`

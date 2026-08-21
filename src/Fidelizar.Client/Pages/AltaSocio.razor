@@ -1,0 +1,587 @@
+@page "/socios/nuevo"
+@using Fidelizar.Client.Api
+@using Fidelizar.Client.Auth
+@using Fidelizar.Client.Formatting
+@using Fidelizar.Shared.Miembros
+@using Fidelizar.Shared.Sucursales
+@using System.Net
+@inject IApiClient ApiClient
+@inject ISessionService SessionService
+@inject NavigationManager Navigation
+@implements IDisposable
+
+@* S5 Alta de socio (FLOW-S2-S5.md §4, FUNCTIONAL-SPEC.md §7). A full page, not a dialog: eight
+   fields and two consent decisions need room to be read. Reached from S2's empty-result CTA and
+   from its always-present secondary link (§4.1).
+
+   Teléfono and DNI are typed here by the very person they belong to, which is why this screen may
+   ask for them while no counter screen ever renders a stored one (FUNCTIONAL-SPEC §5). *@
+
+<PageTitle>Alta de socio — Fidelizar</PageTitle>
+
+@if (SessionService.IsAuthenticated)
+{
+    <div class="alta-socio form-column">
+        <h1 tabindex="-1">Alta de socio</h1>
+
+        @if (_banner is not null)
+        {
+            <div class="alta-socio__banner" role="alert" tabindex="-1" @ref="_bannerRef">
+                <p>@_banner.Mensaje</p>
+                @if (_banner.OfreceIngresar)
+                {
+                    <button type="button" class="btn btn--secondary" @onclick="IrAIngresar">Iniciar sesión</button>
+                }
+            </div>
+        }
+
+        <form class="alta-socio__form" novalidate @onsubmit="CrearAsync" @onsubmit:preventDefault="true">
+            <div class="field">
+                <label for="alta-nombre">Nombre y apellido</label>
+                <input
+                    id="alta-nombre"
+                    class="input"
+                    type="text"
+                    autocomplete="off"
+                    @bind="_nombre"
+                    @bind:event="oninput"
+                    @ref="_nombreInput"
+                    aria-invalid="@Invalido(CampoNombre)"
+                    aria-describedby="@(Error(CampoNombre) is null ? null : "alta-nombre-error")" />
+                @if (Error(CampoNombre) is { } errorNombre)
+                {
+                    <span id="alta-nombre-error" class="field-error">@errorNombre</span>
+                }
+            </div>
+
+            <div class="field">
+                <label for="alta-cliente-externo">
+                    Código de cliente del POS <span class="field__opcional">(opcional)</span>
+                </label>
+                <input
+                    id="alta-cliente-externo"
+                    class="input"
+                    type="text"
+                    autocomplete="off"
+                    @bind="_clienteExternoId"
+                    @bind:event="oninput"
+                    @ref="_clienteExternoInput"
+                    aria-invalid="@Invalido(CampoClienteExterno)"
+                    aria-describedby="alta-cliente-externo-ayuda @(Error(CampoClienteExterno) is null ? "" : "alta-cliente-externo-error")" />
+                <span id="alta-cliente-externo-ayuda" class="field__ayuda">
+                    Normalmente no lo vas a tener a mano. Podés dejarlo vacío — el socio queda dado
+                    de alta igual, pero no acumula puntos hasta que la encargada o el dueño lo
+                    vinculen desde «Socios sin vincular».
+                </span>
+                @if (Error(CampoClienteExterno) is { } errorClienteExterno)
+                {
+                    <span id="alta-cliente-externo-error" class="field-error">@errorClienteExterno</span>
+                }
+            </div>
+
+            <div class="field">
+                <label for="alta-telefono">Teléfono <span class="field__opcional">(opcional)</span></label>
+                <input
+                    id="alta-telefono"
+                    class="input"
+                    type="tel"
+                    inputmode="tel"
+                    autocomplete="off"
+                    @bind="_telefono"
+                    @bind:event="oninput" />
+            </div>
+
+            <div class="field">
+                <label for="alta-dni">DNI <span class="field__opcional">(opcional)</span></label>
+                <input
+                    id="alta-dni"
+                    class="input"
+                    type="text"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    @bind="_dni"
+                    @bind:event="oninput" />
+            </div>
+
+            @* RN-11: day and month only. Two selects rather than a date input, so there is no year
+               to leave blank or fill with a fake one. The day list follows the chosen month, which
+               is why 31 then "febrero" cannot be sent at all. *@
+            <fieldset class="field alta-socio__nacimiento" aria-describedby="@(Error(CampoFechaNacimiento) is null ? null : "alta-nacimiento-error")">
+                <legend>Fecha de nacimiento <span class="field__opcional">(opcional)</span></legend>
+                <div class="alta-socio__nacimiento-controles">
+                    <div class="alta-socio__nacimiento-campo">
+                        <label for="alta-nacimiento-dia">Día</label>
+                        <select
+                            id="alta-nacimiento-dia"
+                            class="input"
+                            value="@_dia"
+                            @onchange="CambiarDia"
+                            @ref="_diaInput"
+                            aria-invalid="@Invalido(CampoFechaNacimiento)">
+                            <option value="">—</option>
+                            @{ var ultimoDia = FechaNacimientoOpciones.DiasDelMes(MesElegido); }
+                            @for (var dia = 1; dia <= ultimoDia; dia++)
+                            {
+                                <option value="@dia">@dia</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="alta-socio__nacimiento-campo">
+                        <label for="alta-nacimiento-mes">Mes</label>
+                        <select
+                            id="alta-nacimiento-mes"
+                            class="input"
+                            value="@_mes"
+                            @onchange="CambiarMes"
+                            aria-invalid="@Invalido(CampoFechaNacimiento)">
+                            <option value="">—</option>
+                            @foreach (var mes in FechaNacimientoOpciones.Meses)
+                            {
+                                <option value="@mes.Numero">@mes.Nombre</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                @if (Error(CampoFechaNacimiento) is { } errorNacimiento)
+                {
+                    <span id="alta-nacimiento-error" class="field-error">@errorNacimiento</span>
+                }
+            </fieldset>
+
+            @* Only a Dueño sees this: GET /api/sucursales carries [Authorize(DuenoOnly)], so no
+               other role can be offered a list it cannot load. Presentation only — the alta
+               endpoint validates SucursalId server-side either way (ARCHITECTURE §8). *@
+            @if (EsDueno && _sucursales.Count > 0)
+            {
+                <div class="field">
+                    <label for="alta-sucursal">Sucursal <span class="field__opcional">(opcional)</span></label>
+                    <select
+                        id="alta-sucursal"
+                        class="input"
+                        value="@_sucursalId"
+                        @onchange="CambiarSucursal"
+                        @ref="_sucursalInput"
+                        aria-invalid="@Invalido(CampoSucursal)"
+                        aria-describedby="@(Error(CampoSucursal) is null ? null : "alta-sucursal-error")">
+                        <option value="">Sin asignar</option>
+                        @foreach (var sucursal in _sucursales)
+                        {
+                            <option value="@sucursal.Id">@sucursal.Nombre</option>
+                        }
+                    </select>
+                    @if (Error(CampoSucursal) is { } errorSucursal)
+                    {
+                        <span id="alta-sucursal-error" class="field-error">@errorSucursal</span>
+                    }
+                </div>
+            }
+
+            @* I10 / FUNCTIONAL-SPEC §7: consent is part of the form, never a pre-ticked box and
+               never buried in a link — so the wording is on screen in full, above the checkbox
+               that records the decision. The text comes from the server with this business's own
+               name, CUIT and address already substituted in; none of it is a literal here. *@
+            <fieldset class="alta-socio__consentimiento">
+                <legend>Consentimiento de datos personales <span class="alta-socio__marca alta-socio__marca--obligatorio">obligatorio</span></legend>
+                @if (_cargandoTextos)
+                {
+                    <p class="alta-socio__estado" role="status">Cargando el texto del consentimiento…</p>
+                }
+                else if (_textoDatosPersonales is null)
+                {
+                    <p class="alta-socio__estado">
+                        No pudimos mostrar el texto del consentimiento. Sin ese texto no se puede
+                        dar el alta — probá de nuevo.
+                    </p>
+                    <button type="button" class="btn btn--secondary" @onclick="CargarTextosAsync">Reintentar</button>
+                }
+                else
+                {
+                    <p class="alta-socio__texto" id="alta-texto-datos-personales">@_textoDatosPersonales.Texto</p>
+                    <label class="alta-socio__check">
+                        <input
+                            type="checkbox"
+                            @bind="_consentimientoDatosPersonales"
+                            @ref="_consentimientoInput"
+                            aria-describedby="alta-texto-datos-personales @(Error(CampoConsentimiento) is null ? "" : "alta-consentimiento-error")"
+                            aria-invalid="@Invalido(CampoConsentimiento)" />
+                        <span>El socio leyó este texto y presta su consentimiento.</span>
+                    </label>
+                    @if (Error(CampoConsentimiento) is { } errorConsentimiento)
+                    {
+                        <span id="alta-consentimiento-error" class="field-error">@errorConsentimiento</span>
+                    }
+                }
+            </fieldset>
+
+            @* Optional, and the text itself says so: the alta se hace igual sin este. Ticking it
+               reveals no diet or allergy field — there are none in phase 1. What is recorded today
+               is only the decision, ahead of having anything to gate with it (I10). *@
+            <fieldset class="alta-socio__consentimiento">
+                <legend>Consentimiento de datos sensibles <span class="alta-socio__marca">opcional</span></legend>
+                @if (_cargandoTextos)
+                {
+                    <p class="alta-socio__estado" role="status">Cargando el texto del consentimiento…</p>
+                }
+                else if (_textoDatosSensibles is null)
+                {
+                    <p class="alta-socio__estado">
+                        No pudimos mostrar el texto de este consentimiento. El alta se puede
+                        registrar igual, sin él.
+                    </p>
+                }
+                else
+                {
+                    <p class="alta-socio__texto" id="alta-texto-datos-sensibles">@_textoDatosSensibles.Texto</p>
+                    <label class="alta-socio__check">
+                        <input
+                            type="checkbox"
+                            @bind="_consentimientoDatosSensibles"
+                            aria-describedby="alta-texto-datos-sensibles" />
+                        <span>El socio leyó este texto y presta su consentimiento.</span>
+                    </label>
+                }
+            </fieldset>
+
+            @* disabled, not only aria-busy: pointer-events blocks a second click and not a second
+               Enter (DESIGN-SYSTEM §9.5). A double-submitted alta is a duplicated socio. *@
+            <div class="alta-socio__acciones">
+                <button
+                    type="submit"
+                    class="btn btn--primary alta-socio__crear"
+                    disabled="@BotonBloqueado"
+                    aria-busy="@(_enviando ? "true" : "false")">
+                    Crear socio
+                </button>
+                <a class="btn btn--secondary alta-socio__cancelar" href="/">Volver a la búsqueda</a>
+            </div>
+        </form>
+    </div>
+}
+
+@code {
+    // Field keys: the request's own property names, so a server detail[].field lands on the same
+    // control the client-side check would have marked (FLOW-S2-S5.md §4.4).
+    private const string CampoNombre = nameof(AltaMiembroRequest.Nombre);
+    private const string CampoClienteExterno = nameof(AltaMiembroRequest.ClienteExternoId);
+    private const string CampoFechaNacimiento = nameof(AltaMiembroRequest.FechaNacimientoDia);
+    private const string CampoSucursal = nameof(AltaMiembroRequest.SucursalId);
+    private const string CampoConsentimiento = nameof(AltaMiembroRequest.ConsentimientoDatosPersonales);
+
+    private string _nombre = string.Empty;
+    private string _clienteExternoId = string.Empty;
+    private string _telefono = string.Empty;
+    private string _dni = string.Empty;
+    private string _dia = string.Empty;
+    private string _mes = string.Empty;
+    private string _sucursalId = string.Empty;
+    private bool _consentimientoDatosPersonales;
+    private bool _consentimientoDatosSensibles;
+
+    private ConsentimientoTextoResponse? _textoDatosPersonales;
+    private ConsentimientoTextoResponse? _textoDatosSensibles;
+    private bool _cargandoTextos = true;
+    private IReadOnlyList<SucursalResponse> _sucursales = [];
+
+    private bool _enviando;
+    private Banner? _banner;
+    private bool _focoAlBanner;
+    private readonly Dictionary<string, string> _errores = new(StringComparer.OrdinalIgnoreCase);
+
+    private ElementReference _nombreInput;
+    private ElementReference _clienteExternoInput;
+    private ElementReference _diaInput;
+    private ElementReference _sucursalInput;
+    private ElementReference _consentimientoInput;
+    private ElementReference _bannerRef;
+
+    private readonly CancellationTokenSource _cts = new();
+
+    private sealed record Banner(string Mensaje, bool OfreceIngresar = false);
+
+    private bool EsDueno => SessionService.Current?.Rol == Roles.Dueno;
+
+    private int? MesElegido => int.TryParse(_mes, out var mes) ? mes : null;
+
+    /// <summary>No alta without the mandatory wording on screen: an unread consent is not an
+    /// informed one (I10, FUNCTIONAL-SPEC §7).</summary>
+    private bool BotonBloqueado => _enviando || _cargandoTextos || _textoDatosPersonales is null;
+
+    private string Invalido(string campo) => _errores.ContainsKey(campo) ? "true" : "false";
+
+    private string? Error(string campo) => _errores.TryGetValue(campo, out var mensaje) ? mensaje : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SessionService.Changed += OnSessionChanged;
+
+        if (!SessionService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/ingreso", replace: true);
+            return;
+        }
+
+        await CargarTextosAsync();
+        await CargarSucursalesAsync();
+    }
+
+    private void OnSessionChanged()
+    {
+        if (!SessionService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/ingreso", replace: true);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CargarTextosAsync()
+    {
+        _cargandoTextos = true;
+        StateHasChanged();
+
+        ApiResult<ConsentimientoTextoResponse> personales;
+        ApiResult<ConsentimientoTextoResponse> sensibles;
+        try
+        {
+            personales = await ApiClient.GetAsync<ConsentimientoTextoResponse>(
+                "api/miembros/consentimiento-texto/DatosPersonales", _cts.Token);
+            sensibles = await ApiClient.GetAsync<ConsentimientoTextoResponse>(
+                "api/miembros/consentimiento-texto/DatosSensibles", _cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // the screen is gone; nothing left to render into
+        }
+
+        _textoDatosPersonales = personales.Success ? personales.Value : null;
+        _textoDatosSensibles = sensibles.Success ? sensibles.Value : null;
+
+        // A consent whose wording never reached the screen cannot be claimed as given.
+        if (_textoDatosPersonales is null)
+        {
+            _consentimientoDatosPersonales = false;
+        }
+
+        if (_textoDatosSensibles is null)
+        {
+            _consentimientoDatosSensibles = false;
+        }
+
+        _cargandoTextos = false;
+        StateHasChanged();
+    }
+
+    /// <summary>Dueño only, mirroring the endpoint's own policy — a failure here just leaves the
+    /// select out, it never blocks an alta that does not need a branch.</summary>
+    private async Task CargarSucursalesAsync()
+    {
+        if (!EsDueno)
+        {
+            return;
+        }
+
+        try
+        {
+            var resultado = await ApiClient.GetAsync<List<SucursalResponse>>("api/sucursales", _cts.Token);
+
+            if (resultado.Success)
+            {
+                _sucursales = resultado.Value.Where(s => s.Activa).ToList();
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // the screen is gone; nothing left to render into
+        }
+    }
+
+    private void CambiarDia(ChangeEventArgs args) => _dia = args.Value?.ToString() ?? string.Empty;
+
+    /// <summary>A day that no longer exists in the new month is dropped rather than sent and
+    /// rejected as FECHA_NACIMIENTO_INVALIDA (31 then "febrero").</summary>
+    private void CambiarMes(ChangeEventArgs args)
+    {
+        _mes = args.Value?.ToString() ?? string.Empty;
+
+        if (int.TryParse(_dia, out var dia) && !FechaNacimientoOpciones.DiaCabeEnMes(dia, MesElegido))
+        {
+            _dia = string.Empty;
+        }
+    }
+
+    private void CambiarSucursal(ChangeEventArgs args) => _sucursalId = args.Value?.ToString() ?? string.Empty;
+
+    private void IrAIngresar() => Navigation.NavigateTo("/ingreso");
+
+    private async Task CrearAsync()
+    {
+        // disabled in the markup is what stops a second Enter — DESIGN-SYSTEM §9.5.
+        if (BotonBloqueado)
+        {
+            return;
+        }
+
+        if (!Validar())
+        {
+            StateHasChanged();
+            await EnfocarPrimerErrorAsync();
+            return;
+        }
+
+        _enviando = true;
+        _banner = null;
+        StateHasChanged();
+
+        var request = new AltaMiembroRequest(
+            _nombre.Trim(),
+            Opcional(_clienteExternoId),
+            Opcional(_telefono),
+            Opcional(_dni),
+            int.TryParse(_dia, out var dia) ? dia : null,
+            MesElegido,
+            int.TryParse(_sucursalId, out var sucursalId) ? sucursalId : null,
+            _consentimientoDatosPersonales,
+            _consentimientoDatosSensibles);
+
+        var resultado = await ApiClient.PostAsync<AltaMiembroRequest, MiembroResumen>("api/miembros", request);
+
+        _enviando = false;
+
+        if (resultado.Success)
+        {
+            // Straight to S3: exactly where the cashier needs to be if this socio wants to redeem
+            // something right away (FLOW-S2-S5.md §4.4).
+            Navigation.NavigateTo($"/socios/{resultado.Value.Id}?alta=1");
+            return;
+        }
+
+        await MostrarFallaAsync(resultado.Problem!);
+    }
+
+    private static string? Opcional(string valor) =>
+        string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    /// <summary>The two rules FLOW-S2-S5.md §4.3 fixes. Client-side only to save a round trip —
+    /// <c>AltaMiembroService</c> enforces both again and rejects before writing anything.</summary>
+    private bool Validar()
+    {
+        _errores.Clear();
+
+        if (string.IsNullOrWhiteSpace(_nombre))
+        {
+            _errores[CampoNombre] = "Ingresá el nombre del socio.";
+        }
+
+        if (!_consentimientoDatosPersonales)
+        {
+            _errores[CampoConsentimiento] =
+                "Para dar de alta al socio hace falta el consentimiento de datos personales.";
+        }
+
+        return _errores.Count == 0;
+    }
+
+    /// <summary>Server rejections (FLOW-S2-S5.md §4.4) — every field keeps what was typed.</summary>
+    private async Task MostrarFallaAsync(ApiProblem problem)
+    {
+        _errores.Clear();
+
+        foreach (var detalle in problem.Details)
+        {
+            _errores.TryAdd(detalle.Field, detalle.Issue);
+        }
+
+        switch (problem)
+        {
+            case { ErrorCode: "NOMBRE_REQUERIDO" }:
+                _errores.TryAdd(CampoNombre, "Ingresá el nombre del socio.");
+                break;
+
+            case { ErrorCode: "CONSENTIMIENTO_DATOS_PERSONALES_REQUERIDO" }:
+                _errores.TryAdd(
+                    CampoConsentimiento,
+                    "Para dar de alta al socio hace falta el consentimiento de datos personales.");
+                break;
+
+            case { ErrorCode: "FECHA_NACIMIENTO_INCOMPLETA" }:
+                _errores.TryAdd(CampoFechaNacimiento, "Cargá el día y el mes, o dejá los dos vacíos.");
+                break;
+
+            case { ErrorCode: "FECHA_NACIMIENTO_INVALIDA" }:
+                _errores.TryAdd(CampoFechaNacimiento, "Esa fecha de nacimiento no existe.");
+                break;
+
+            case { ErrorCode: "SUCURSAL_INEXISTENTE" }:
+                _errores.TryAdd(CampoSucursal, "Elegí una sucursal de la lista.");
+                break;
+
+            case { ErrorCode: "CLIENTE_EXTERNO_ID_DUPLICADO" }:
+                _errores.TryAdd(
+                    CampoClienteExterno,
+                    "Ese código de cliente ya está vinculado a otro socio. Dejalo vacío y que lo vincule la encargada.");
+                break;
+        }
+
+        _banner = problem switch
+        {
+            { StatusCode: HttpStatusCode.Unauthorized } => new Banner(
+                "Tu sesión venció. Iniciá sesión de nuevo para continuar — no perdés lo que cargaste.",
+                OfreceIngresar: true),
+
+            _ when _errores.Count > 0 => null,
+
+            _ => new Banner("No pudimos registrar al socio. Los datos que cargaste siguen acá — probá de nuevo."),
+        };
+
+        _focoAlBanner = _banner is not null;
+        StateHasChanged();
+
+        if (_banner is null)
+        {
+            await EnfocarPrimerErrorAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focoAlBanner)
+        {
+            _focoAlBanner = false;
+            await _bannerRef.FocusAsync();
+        }
+    }
+
+    /// <summary>Focus lands on the first control in DOM order that complained (DESIGN-SYSTEM §9.1).</summary>
+    private async Task EnfocarPrimerErrorAsync()
+    {
+        if (_errores.ContainsKey(CampoNombre))
+        {
+            await _nombreInput.FocusAsync();
+        }
+        else if (_errores.ContainsKey(CampoClienteExterno))
+        {
+            await _clienteExternoInput.FocusAsync();
+        }
+        else if (_errores.ContainsKey(CampoFechaNacimiento))
+        {
+            await _diaInput.FocusAsync();
+        }
+        else if (_errores.ContainsKey(CampoSucursal) && EsDueno && _sucursales.Count > 0)
+        {
+            await _sucursalInput.FocusAsync();
+        }
+        else if (_errores.ContainsKey(CampoConsentimiento) && _textoDatosPersonales is not null)
+        {
+            await _consentimientoInput.FocusAsync();
+        }
+    }
+
+    /// <summary>Cancelled, not disposed: an in-flight request still holds a registration on this
+    /// token, and disposing it out from under HttpClient is how a teardown throws.</summary>
+    public void Dispose()
+    {
+        SessionService.Changed -= OnSessionChanged;
+        _cts.Cancel();
+    }
+}

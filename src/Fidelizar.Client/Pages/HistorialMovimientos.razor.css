@@ -63,6 +63,20 @@
   font-weight: var(--font-weight-medium);
 }
 
+/* Success, not danger: an anulación is an ordinary correction that worked (DESIGN-SYSTEM §11.2). */
+.historial__confirmacion {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
 .historial__vacio {
   margin: var(--space-5) 0 0;
   color: var(--color-text-muted);
@@ -93,6 +107,17 @@
 .historial__col-num {
   text-align: right;
   white-space: nowrap;
+}
+
+.historial__col-accion {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Secondary, never a danger button in the table: the destructive step is the confirm dialog,
+   and a row of red buttons down a ledger reads as an invitation (DESIGN-SYSTEM §9.2). */
+.historial__anular {
+  min-height: var(--control-size-comfortable);
 }
 
 /* Historical evidence, not the answer to "what is the balance" (I2) — it reads as supporting
@@ -210,6 +235,17 @@
 
   .historial__col-num {
     text-align: right;
+  }
+
+  /* Stacked: the action gets its own full-width row under the labelled fields, so a finger
+     never lands on it while reaching for the row above (DESIGN-SYSTEM §7). */
+  .historial__tabla td.historial__col-accion {
+    justify-content: flex-start;
+    margin-top: var(--space-2);
+  }
+
+  .historial__anular {
+    flex: 1;
   }
 
   .historial__acciones a.btn,

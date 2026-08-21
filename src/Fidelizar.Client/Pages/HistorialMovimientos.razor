@@ -20,8 +20,9 @@
    no Corte declared returns — the movements still render (see CargarAsync).
 
    No row is editable and none is deletable, at any width: the ledger is append-only (I1) and a
-   mistake is corrected by S8, which appends an Ajuste (FUNCTIONAL-SPEC §8). F1-11 adds that
-   action here; this task deliberately leaves no affordance that hints at an edit. *@
+   mistake is corrected by S8, which appends an Ajuste (FUNCTIONAL-SPEC §8). The "Anular" action
+   this screen offers is exactly that append — never an edit, never a delete — and the confirm
+   dialog says so in those words before anything is written. *@
 
 <PageTitle>Historial de movimientos — Fidelizar</PageTitle>
 
@@ -95,6 +96,20 @@ else if (_movimientos is not null)
             </p>
         }
 
+        @if (_anulacionHecha is not null)
+        {
+            @* §9.2 sends focus back to the element that opened the dialog, but that button is
+               gone — the row it belonged to is voided. So focus lands on the outcome instead,
+               which is where a keyboard reader needs to be to carry on down the ledger. *@
+            <p class="historial__confirmacion" role="status" aria-live="polite"
+               tabindex="-1" @ref="_confirmacionRef">
+                <span aria-hidden="true">✓</span>
+                Listo. Se registró un ajuste de
+                <span class="amount">@MovimientoFormatter.MontoConSigno(_anulacionHecha.Monto)</span>
+                que compensa el movimiento anulado. Las dos líneas quedan en el historial.
+            </p>
+        }
+
         @if (_movimientos.Count == 0)
         {
             @* Not an error — a member registered at the counter and not yet linked to the POS has
@@ -121,6 +136,7 @@ else if (_movimientos is not null)
                         <th scope="col" role="columnheader">Motivo</th>
                         <th scope="col" role="columnheader">Registrado</th>
                         <th scope="col" role="columnheader">Registró</th>
+                        <th scope="col" role="columnheader" class="historial__col-accion">Acción</th>
                     </tr>
                 </thead>
                 <tbody role="rowgroup">
@@ -140,10 +156,10 @@ else if (_movimientos is not null)
                                 </span>
                             </td>
                             <td role="cell" data-etiqueta="Tipo">
-                                <span class="badge @ClaseBadgeTipo(movimiento.Tipo)">@EtiquetaTipo(movimiento.Tipo)</span>
+                                <span class="badge @MovimientoFormatter.ClaseBadgeTipo(movimiento.Tipo)">@MovimientoFormatter.EtiquetaTipo(movimiento.Tipo)</span>
                             </td>
                             <td role="cell" data-etiqueta="Monto" class="historial__col-num amount">
-                                @MontoConSigno(movimiento.Monto)
+                                @MovimientoFormatter.MontoConSigno(movimiento.Monto)
                             </td>
                             <td role="cell" data-etiqueta="Saldo resultante" class="historial__col-num amount historial__saldo-fila">
                                 @MoneyFormatter.Format(movimiento.SaldoResultante)
@@ -151,6 +167,29 @@ else if (_movimientos is not null)
                             <td role="cell" data-etiqueta="Motivo">@(string.IsNullOrEmpty(movimiento.Motivo) ? "—" : movimiento.Motivo)</td>
                             <td role="cell" data-etiqueta="Registrado">@FechaFormatter.ConHora(movimiento.RegistradoEn)</td>
                             <td role="cell" data-etiqueta="Registró">@(string.IsNullOrEmpty(movimiento.UsuarioNombre) ? "Sistema" : movimiento.UsuarioNombre)</td>
+                            <td role="cell" data-etiqueta="Acción" class="historial__col-accion">
+                                @if (_anulados.Contains(movimiento.Id))
+                                {
+                                    @* Out of the tab order once it is done: the action is spent
+                                       for this reading of the ledger. *@
+                                    <span class="badge badge--neutral">Anulado recién</span>
+                                }
+                                else
+                                {
+                                    <button
+                                        type="button"
+                                        class="btn btn--secondary historial__anular"
+                                        @ref="_botonesAnular[movimiento.Id]"
+                                        @onclick="() => AbrirAnulacionAsync(movimiento)">
+                                        Anular
+                                        <span class="visually-hidden">
+                                            el @MovimientoFormatter.EtiquetaTipo(movimiento.Tipo)
+                                            de @MovimientoFormatter.MontoConSigno(movimiento.Monto)
+                                            del @FechaFormatter.Corta(movimiento.FechaEfectiva)
+                                        </span>
+                                    </button>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>
@@ -181,7 +220,13 @@ else if (_movimientos is not null)
                 </p>
                 <p>
                     Un movimiento no se edita ni se borra nunca: si hay un error, se corrige con un ajuste
-                    que queda registrado como una línea más.
+                    que queda registrado como una línea más. Eso es lo que hace <strong>Anular</strong> —
+                    agrega el ajuste que compensa, sin tocar la línea original.
+                </p>
+                <p>
+                    <strong>Anulado recién</strong> marca lo que anulaste en esta pantalla, para no anularlo
+                    dos veces sin darte cuenta. Si volvés a entrar, la marca no está: lo que queda es el
+                    ajuste, visible en la lista.
                 </p>
             </div>
         }
@@ -191,6 +236,15 @@ else if (_movimientos is not null)
             <a class="historial__volver" href="@($"/socios/{MiembroId}")">← Volver a la ficha del mostrador</a>
         </div>
     </div>
+
+    @* S8. Mounted once and reused for whichever row is being voided — one dialog, not one per
+       row (FUNCTIONAL-SPEC §8). *@
+    <AnularMovimientoDialog
+        @ref="_anularDialogo"
+        Movimiento="_movimientoAAnular"
+        OnAnulado="AlAnularAsync"
+        OnRevisarHistorial="CargarAsync"
+        OnCerrado="AlCerrarAnulacionAsync" />
 }
 
 @code {
@@ -218,6 +272,31 @@ else if (_movimientos is not null)
     private int? _cargadoParaId;
     private CancellationTokenSource? _cts;
 
+    // S8 state.
+    private AnularMovimientoDialog? _anularDialogo;
+    private MovimientoResponse? _movimientoAAnular;
+    private MovimientoResponse? _anulacionHecha;
+
+    /// <summary>The row the open dialog belongs to. Kept apart from <c>_movimientoAAnular</c>
+    /// because the dialog closes before it reports the result, and the close handler must not
+    /// erase which row the result is about.</summary>
+    private long? _idAnulando;
+
+    /// <summary>Ids voided during this reading of the ledger. The endpoint carries no
+    /// idempotency key and the contract has no column linking an Ajuste to the movement it
+    /// corrects (DATA-MODEL §4), so this is the only thing standing between a distracted manager
+    /// and a second Ajuste on the same row. Deliberately not persisted: claiming more than one
+    /// page view would be a lie, and the legend says as much.</summary>
+    private readonly HashSet<long> _anulados = [];
+
+    /// <summary>One capture per row, so focus returns to the exact button that opened the
+    /// dialog (DESIGN-SYSTEM §9.2).</summary>
+    private readonly Dictionary<long, ElementReference> _botonesAnular = [];
+
+    private long? _devolverFocoA;
+    private ElementReference _confirmacionRef;
+    private bool _focoConfirmacion;
+
     private int Mostrados => _movimientos is null ? 0 : Math.Min(_visibles, _movimientos.Count);
 
     private IEnumerable<MovimientoResponse> Visibles => _movimientos?.Take(Mostrados) ?? [];
@@ -229,15 +308,39 @@ else if (_movimientos is not null)
             return;
         }
 
+        // Another member's ledger: nothing about the previous one carries over.
+        _anulados.Clear();
+        _botonesAnular.Clear();
+        _anulacionHecha = null;
+        _movimientoAAnular = null;
+        _idAnulando = null;
+
         await CargarAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_pendingFocus)
+        if (_focoConfirmacion)
+        {
+            _focoConfirmacion = false;
+            _devolverFocoA = null;
+            await _confirmacionRef.FocusAsync();
+        }
+        else if (_pendingFocus)
         {
             _pendingFocus = false;
             await _focusTarget.FocusAsync();
+        }
+        else if (_devolverFocoA is { } id)
+        {
+            _devolverFocoA = null;
+
+            // Gone if the row was voided (its button became a badge) or the ledger reloaded
+            // without it — the page keeps whatever focus it has rather than throwing.
+            if (_botonesAnular.TryGetValue(id, out var boton) && !_anulados.Contains(id))
+            {
+                await boton.FocusAsync();
+            }
         }
     }
 
@@ -323,6 +426,62 @@ else if (_movimientos is not null)
 
     private void MostrarMas() => _visibles += TamanoPagina;
 
+    /// <summary>S8 opens over this screen, never as a navigation: the manager keeps the ledger
+    /// she is reading in view behind the confirm (FUNCTIONAL-SPEC §8).</summary>
+    private async Task AbrirAnulacionAsync(MovimientoResponse movimiento)
+    {
+        if (_anulados.Contains(movimiento.Id))
+        {
+            return;
+        }
+
+        _movimientoAAnular = movimiento;
+        _idAnulando = movimiento.Id;
+        _anulacionHecha = null;
+
+        // Push the parameter down before showModal(), so the dialog is never briefly open
+        // without the movement it is asking about.
+        StateHasChanged();
+
+        if (_anularDialogo is not null)
+        {
+            await _anularDialogo.AbrirAsync();
+        }
+    }
+
+    /// <summary>The server appended the Ajuste. The ledger is re-read rather than patched: the
+    /// balance after a correction is the server's answer, never one this page works out
+    /// (I2).</summary>
+    private async Task AlAnularAsync(MovimientoResponse ajuste)
+    {
+        if (_idAnulando is { } id)
+        {
+            _anulados.Add(id);
+        }
+
+        _anulacionHecha = ajuste;
+        await CargarAsync();
+
+        // The reload would otherwise throw focus back up to the <h1>, as a fresh navigation does.
+        // Only when the confirmation actually rendered: if the reload itself failed, the screen is
+        // an ErrorNotice and the <h1> is the right place for focus after all.
+        if (_movimientos is not null && _problem is null && !_prohibido && !_noEncontrado)
+        {
+            _pendingFocus = false;
+            _focoConfirmacion = true;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Focus goes back to the row's own button, whatever closed the dialog — Esc, the
+    /// ×, Cancelar or a backdrop click (DESIGN-SYSTEM §9.2).</summary>
+    private Task AlCerrarAnulacionAsync()
+    {
+        _devolverFocoA = _idAnulando;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
     /// <summary>
     /// DATA-MODEL §4: <c>FechaEfectiva</c> is when it happened, <c>RegistradoEn</c> is when the
     /// system learned about it. Both columns are always on screen; this badge names the one case
@@ -340,30 +499,9 @@ else if (_movimientos is not null)
         movimiento.Tipo == "Canje"
         && movimiento.FechaEfectiva != FechaFormatter.FechaLocalDe(movimiento.RegistradoEn);
 
-    /// <summary>An explicit "+" so the direction of a movement reads without comparing it to the
-    /// row above (the "−" comes from MoneyFormatter itself). The badge beside it carries the same
-    /// information in words: colour never says anything on its own (DESIGN-SYSTEM §4).</summary>
-    private static string MontoConSigno(decimal monto) =>
-        monto > 0 ? $"+{MoneyFormatter.Format(monto)}" : MoneyFormatter.Format(monto);
-
-    /// <summary>The enum's own name, as it travels on the wire. The fallback is deliberate:
-    /// <c>Tipo</c> is append-only (DATA-MODEL §4), so a type added later shows up under its raw
-    /// name instead of vanishing from a ledger row.</summary>
-    private static string EtiquetaTipo(string tipo) => tipo switch
-    {
-        "SaldoInicial" => "Saldo inicial",
-        "Acumulacion" => "Acumulación",
-        "Canje" => "Canje",
-        "Ajuste" => "Ajuste",
-        _ => tipo,
-    };
-
-    private static string ClaseBadgeTipo(string tipo) => tipo switch
-    {
-        "Acumulacion" => "badge--success",
-        "Ajuste" => "badge--warning",
-        _ => "badge--neutral",
-    };
+    // EtiquetaTipo, ClaseBadgeTipo and MontoConSigno moved to Formatting/MovimientoFormatter.cs
+    // when S8 arrived: the confirm dialog has to name the movement being voided exactly as the
+    // row it was clicked from.
 
     public override void Dispose()
     {

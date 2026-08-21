@@ -1,0 +1,195 @@
+/* S5 Alta de socio. Every value comes from tokens.css (DESIGN-SYSTEM §14) — no literal colour
+   or size here, and no primitive redefined: .input, .btn, .field-error and .badge stay as the
+   design system built them. */
+
+.alta-socio {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* tokens.css leaves headings at the browser default; DESIGN-SYSTEM §5 puts a screen title at
+   --text-xl. Scoped to this page, as S10 does — a global heading rule belongs to the system. */
+.alta-socio h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.alta-socio__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ---------- Fields ---------- */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0; /* a fieldset defaults to min-content, which breaks the flex column */
+}
+
+.field label,
+.field legend {
+  padding: 0;
+  font-weight: var(--font-weight-medium);
+}
+
+.field__opcional {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-regular);
+  font-size: var(--text-sm);
+}
+
+.field__ayuda {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.alta-socio select.input {
+  /* A native select ignores min-height on some engines unless height is set with it. */
+  height: var(--control-size-comfortable);
+}
+
+/* ---------- Fecha de nacimiento (RN-11: día y mes) ---------- */
+
+.alta-socio__nacimiento-controles {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.alta-socio__nacimiento-campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.alta-socio__nacimiento-campo:first-child {
+  flex: 0 0 7rem;
+}
+
+.alta-socio__nacimiento-campo:last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.alta-socio__nacimiento-campo label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-regular);
+}
+
+/* ---------- Consentimientos (I10) ---------- */
+
+.alta-socio__consentimiento {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  min-inline-size: 0;
+}
+
+.alta-socio__consentimiento legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  font-weight: var(--font-weight-bold);
+}
+
+.alta-socio__marca {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-sunken);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-regular);
+}
+
+.alta-socio__marca--obligatorio {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-weight: var(--font-weight-bold);
+}
+
+/* The wording is read, not skimmed: full size, relaxed leading, never clipped behind a scroll
+   box or a disclosure — FUNCTIONAL-SPEC §7, "not buried in a link". */
+.alta-socio__texto {
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.alta-socio__estado {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.alta-socio__check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-size-comfortable);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+/* The box itself is the target, so it gets a finger-sized one rather than the browser's 13px. */
+.alta-socio__check input[type="checkbox"] {
+  flex-shrink: 0;
+  width: var(--space-6);
+  height: var(--space-6);
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+/* ---------- Banner de falla ---------- */
+
+.alta-socio__banner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+}
+
+.alta-socio__banner p {
+  margin: 0;
+  color: var(--color-danger);
+  font-weight: var(--font-weight-bold);
+}
+
+/* ---------- Acciones ---------- */
+
+.alta-socio__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The button that matters (DESIGN-SYSTEM §7). */
+.alta-socio__crear {
+  min-height: var(--control-size-primary);
+  padding-inline: var(--space-6);
+}
+
+/* .btn does not clear an anchor's underline — it was written for <button>. */
+.alta-socio__cancelar {
+  text-decoration: none;
+}

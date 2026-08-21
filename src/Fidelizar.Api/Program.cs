@@ -2,6 +2,7 @@ using Fidelizar.Api.Configurations;
 using Fidelizar.Api.Middleware;
 using Fidelizar.Infrastructure.Configurations;
 using Fidelizar.Infrastructure.Persistence;
+using Fidelizar.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 
@@ -91,6 +92,47 @@ public class Program
             app.MapControllers();
             // F1-04: a monitoring probe carries no session, so the fallback policy would otherwise reject it with 401.
             app.MapHealthChecks("/health").AllowAnonymous();
+
+            // ARCHITECTURE §3 "One deployable unit": Api serves the compiled WebAssembly client
+            // from the same origin, so there is one container, one port and no CORS. The client's
+            // assets reach Api's wwwroot through the ProjectReference in Fidelizar.Api.csproj.
+            //
+            // Mapped as endpoints, not as middleware ahead of UseRouting, so a request for a
+            // static file still crosses UseRateLimiter, UseAuthentication and UseAuthorization
+            // above — there is no bypass lane around them.
+            //
+            // MapStaticAssets (not UseStaticFiles) because it answers from the build-time asset
+            // manifest, which carries the right Content-Type for every file Blazor needs —
+            // including _framework/*.dat, which the default extension provider does not know and
+            // would refuse to serve.
+            //
+            // AllowAnonymous on both: F1-04's fallback policy requires an authenticated user, and
+            // nobody can authenticate before the browser has downloaded the login screen. This
+            // exposes nothing — Client compiles only against Shared (§3), and every endpoint that
+            // returns data still enforces its own policy.
+            app.MapStaticAssets().AllowAnonymous();
+
+            // /api belongs to the server and is never a client route. Without this, the SPA
+            // fallback below answers 200 index.html to an unknown /api path — measured, not
+            // assumed: the test that asserts it was red before this line existed. A client
+            // calling a mistyped or removed endpoint would then get HTML where it expected JSON,
+            // and read a parse error instead of the 404 that tells it what actually happened.
+            // "/api/{*path}" is a more specific pattern than the SPA catch-all, so it wins.
+            app.MapFallback("/api/{*path}", (HttpContext context) =>
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return context.Response.WriteAsJsonAsync(
+                    new ErrorResponse("NOT_FOUND", "The requested endpoint does not exist."));
+            }).AllowAnonymous();
+
+            // The SPA fallback: any path the client routes itself (/ingreso, /socios/buscar) has
+            // to return index.html so Blazor can route it. Its pattern is "{*path:nonfile}" at
+            // order int.MaxValue, so it is the last endpoint considered — /health, /api/* and
+            // every static file are matched first.
+            //
+            // This is the Blazor-specific line: replacing the client with React means changing
+            // the file this falls back to, and nothing else in this pipeline.
+            app.MapFallbackToFile("index.html").AllowAnonymous();
 
             Log.Information("Fidelizar.Api started");
 

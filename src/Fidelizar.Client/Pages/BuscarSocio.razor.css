@@ -4,6 +4,11 @@ h1 {
   font-weight: var(--font-weight-bold);
 }
 
+/* S5's arrival confirmation, above the ficha it just created (FLOW-S2-S5.md §4.4). */
+.buscar-socio__alta {
+  margin: 0 0 var(--space-3);
+}
+
 /* Narrow/Medium: S2 and S3 are separate, sequential screens once a member is selected
    (FLOW-S2-S5.md §1.6) — hide the aside so only the ficha shows. At >=1024px this rule simply
    does not apply, and tokens.css's own .split rule already puts both side by side. */

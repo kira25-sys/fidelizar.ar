@@ -38,6 +38,14 @@
                 <BusquedaSocioPanel AutoFocus="false" />
             </div>
             <div class="split__main">
+                @* S5's landing (FLOW-S2-S5.md §4.4): the alta ends on this member's ficha, which
+                   is where the cashier already needs to be if the socio wants to redeem something
+                   right away. The badge is carried by the URL rather than by shared state so the
+                   two screens stay independent of each other. *@
+                @if (VieneDeAlta)
+                {
+                    <p class="badge badge--success buscar-socio__alta" role="status">Socio registrado.</p>
+                }
                 <FichaSocioCard MiembroId="MiembroId.Value" />
             </div>
         </div>
@@ -46,6 +54,11 @@
 
 @code {
     [Parameter] public int? MiembroId { get; set; }
+
+    /// <summary>Set to "1" by S5 on a successful alta (AltaSocio.razor) — nothing else sets it.</summary>
+    [SupplyParameterFromQuery(Name = "alta")] public string? Alta { get; set; }
+
+    private bool VieneDeAlta => MiembroId is not null && Alta == "1";
 
     protected override void OnInitialized()
     {

@@ -118,8 +118,15 @@ public class Program
             // assets reach Api's wwwroot through the ProjectReference in Fidelizar.Api.csproj.
             //
             // Mapped as endpoints, not as middleware ahead of UseRouting, so a request for a
-            // static file still crosses UseRateLimiter, UseAuthentication and UseAuthorization
-            // above — there is no bypass lane around them.
+            // static file still crosses UseAuthentication and UseAuthorization above.
+            //
+            // The one exception is the rate limiter, and it is not a preference: booting the
+            // WebAssembly client downloads ~200 files at once, so a single first load blows past
+            // the global 100/60s budget and the browser gets 429 for most of _framework/ — the
+            // app never starts. Measured on 2026-08-21. Raising the limit is not the fix either:
+            // the file count belongs to the framework, and one reload would trip it again. The
+            // limiter exists to protect login and the API (ARCHITECTURE §8); a static file served
+            // from the build manifest is not what it defends against.
             //
             // MapStaticAssets (not UseStaticFiles) because it answers from the build-time asset
             // manifest, which carries the right Content-Type for every file Blazor needs —
@@ -130,7 +137,7 @@ public class Program
             // nobody can authenticate before the browser has downloaded the login screen. This
             // exposes nothing — Client compiles only against Shared (§3), and every endpoint that
             // returns data still enforces its own policy.
-            app.MapStaticAssets().AllowAnonymous();
+            app.MapStaticAssets().AllowAnonymous().DisableRateLimiting();
 
             // /api belongs to the server and is never a client route. Without this, the SPA
             // fallback below answers 200 index.html to an unknown /api path — measured, not
@@ -152,7 +159,7 @@ public class Program
             //
             // This is the Blazor-specific line: replacing the client with React means changing
             // the file this falls back to, and nothing else in this pipeline.
-            app.MapFallbackToFile("index.html").AllowAnonymous();
+            app.MapFallbackToFile("index.html").AllowAnonymous().DisableRateLimiting();
 
             Log.Information("Fidelizar.Api started");
 

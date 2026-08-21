@@ -64,9 +64,10 @@ public sealed class MovimientoCreditoConfiguration : IEntityTypeConfiguration<Mo
 
         builder.Property(m => m.ConfiguracionId);
 
-        // README decision #6 (2026-08-19). Null for every type except Canje — the max length
-        // is generous for a client-generated key (a GUID is 36 chars) without inviting an
-        // unbounded value onto an indexed column.
+        // README decision #6 (2026-08-19). Set on every client-POSTed movement — Canje (S4) and
+        // the Ajuste an anulación writes (S8, 2026-08-21). The max length is generous for a
+        // client-generated key (a GUID is 36 chars) without inviting an unbounded value onto an
+        // indexed column.
         builder.Property(m => m.ClaveIdempotencia)
             .HasMaxLength(100);
 
@@ -81,9 +82,10 @@ public sealed class MovimientoCreditoConfiguration : IEntityTypeConfiguration<Mo
             .HasFilter($"\"Tipo\" = {(int)TipoMovimientoCredito.Acumulacion}")
             .HasDatabaseName("IX_MovimientosCredito_Acumulacion_Unica");
 
-        // README decision #6 (2026-08-19): the guarantee against a double-written Canje lives
+        // README decision #6 (2026-08-19): the guarantee against a double-written movement lives
         // here, in the database — a check-then-insert in code cannot close the race between two
-        // simultaneous retries with the same key, this index can.
+        // simultaneous retries with the same key, this index can. It covers the whole ledger, not
+        // just Canje, which is why S8's Ajuste needed no migration of its own.
         builder.HasIndex(m => new { m.NegocioId, m.ClaveIdempotencia })
             .IsUnique()
             .HasFilter("\"ClaveIdempotencia\" IS NOT NULL")

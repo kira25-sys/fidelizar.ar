@@ -51,12 +51,13 @@ public sealed class MovimientoCredito
     public int? ConfiguracionId { get; private set; }
 
     /// <summary>
-    /// The client-generated key that makes a redemption retry safe (README decision #6, decided
-    /// 2026-08-19). One per attempt, not per logical redemption: the cashier's client keeps the
-    /// same key across a lost-response retry, so a second POST with the same key never produces a
-    /// second row. Enforced by a unique partial index on <c>(NegocioId, ClaveIdempotencia)</c> —
-    /// the guarantee lives in the database, not in a check-then-insert that a race can slip past.
-    /// Null for every movement type except <c>Canje</c>.
+    /// The client-generated key that makes a write retry safe (README decision #6, decided
+    /// 2026-08-19; extended to S8 Anular movimiento 2026-08-21). One per attempt: the client keeps
+    /// the same key across a lost-response retry, so a second POST with the same key never
+    /// produces a second row. Enforced by a unique partial index on
+    /// <c>(NegocioId, ClaveIdempotencia)</c> — the guarantee lives in the database, not in a
+    /// check-then-insert that a race can slip past. Null for movements no client POSTs
+    /// (<c>SaldoInicial</c>, <c>Acumulacion</c>).
     /// </summary>
     public string? ClaveIdempotencia { get; private set; }
 

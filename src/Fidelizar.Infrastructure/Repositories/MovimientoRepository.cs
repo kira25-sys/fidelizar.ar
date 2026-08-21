@@ -77,13 +77,13 @@ public sealed class MovimientoRepository(FidelizarDbContext dbContext) : IMovimi
         catch (DbUpdateException ex) when (EsViolacionDeClaveIdempotencia(ex))
         {
             // README decision #6: two concurrent retries with the same key both reached this
-            // point past the application-level check in SaldoService — the unique partial index
-            // on (NegocioId, ClaveIdempotencia) is what actually stops the second row, and this is
-            // that stop surfacing. The caller re-reads the winner via GetPorClaveIdempotenciaAsync
-            // and returns it instead of treating this as a failure.
+            // point past the application-level check in SaldoService/AnulacionMovimientoService —
+            // the unique partial index on (NegocioId, ClaveIdempotencia) is what actually stops
+            // the second row, and this is that stop surfacing. The caller re-reads the winner via
+            // GetPorClaveIdempotenciaAsync and returns it instead of treating this as a failure.
             await transaction.RollbackAsync(cancellationToken);
             throw new ConflictException(
-                "Ya existe un canje registrado con esta clave de idempotencia.",
+                "Ya existe un movimiento registrado con esta clave de idempotencia.",
                 "CLAVE_IDEMPOTENCIA_EN_USO");
         }
 

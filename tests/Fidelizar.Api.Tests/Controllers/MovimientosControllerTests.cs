@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Fidelizar.Api.Controllers;
 using Fidelizar.Api.Security;
@@ -8,6 +9,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Fidelizar.Api.Tests.Controllers;
 
@@ -48,13 +51,14 @@ public class MovimientosControllerTests
         };
         var controller = CrearControlador(servicio);
 
-        var resultado = await controller.Anular(100L, new AnularMovimientoRequest("Corrección"), CancellationToken.None);
+        var resultado = await controller.Anular(100L, new AnularMovimientoRequest("Corrección", "clave-de-la-anulacion"), CancellationToken.None);
 
         Assert.IsType<OkObjectResult>(resultado);
         Assert.NotNull(servicio.UltimoRequest);
         Assert.Equal(NegocioId, servicio.UltimoRequest!.NegocioId);
         Assert.Equal(UsuarioId, servicio.UltimoRequest.UsuarioId);
         Assert.Equal(100L, servicio.UltimoRequest.MovimientoId);
+        Assert.Equal("clave-de-la-anulacion", servicio.UltimoRequest.ClaveIdempotencia);
     }
 
     [Fact]
@@ -65,6 +69,25 @@ public class MovimientosControllerTests
             .Cast<AuthorizeAttribute>();
 
         Assert.Contains(autorizan, a => a.Policy == Policies.EncargadaOrAbove);
+    }
+
+    /// <summary>README decisión #6 (S8, 2026-08-21): sin clave el endpoint no puede distinguir un
+    /// reintento de una segunda anulación. El body la exige con las mismas anotaciones que S4, así
+    /// que una clave ausente la rechaza MVC con 400 antes de llegar al controlador.</summary>
+    [Fact]
+    public void El_body_exige_ClaveIdempotencia_como_el_de_canje()
+    {
+        var servicios = new ServiceCollection();
+        servicios.AddLogging();
+        servicios.AddMvcCore().AddDataAnnotations();
+        using var proveedor = servicios.BuildServiceProvider();
+
+        var metadata = proveedor.GetRequiredService<IModelMetadataProvider>()
+            .GetMetadataForProperties(typeof(AnularMovimientoRequest))
+            .Single(m => m.Name == nameof(AnularMovimientoRequest.ClaveIdempotencia));
+
+        Assert.Contains(metadata.ValidatorMetadata, v => v is RequiredAttribute);
+        Assert.Contains(metadata.ValidatorMetadata, v => v is StringLengthAttribute { MaximumLength: 100 });
     }
 
     [Fact]

@@ -11,7 +11,8 @@ namespace Fidelizar.Api.Controllers;
 /// S8 Anular movimiento (FUNCTIONAL-SPEC §8) — Encargada/Dueño only. This is invariant I1
 /// surfaced in the UI: there is no edit and no delete anywhere in this product, only a new
 /// <c>Ajuste</c>. <c>NegocioId</c> and the acting user always come from the JWT (I8, ARCHITECTURE
-/// §8), never from the body.
+/// §8), never from the body. Idempotent on the body's <c>ClaveIdempotencia</c>: a retry after a
+/// lost response returns the original <c>Ajuste</c> instead of writing a second one.
 /// </summary>
 [ApiController]
 [Route("api/movimientos")]
@@ -28,7 +29,8 @@ public sealed class MovimientosController(IAnulacionMovimientoService anulacionM
         var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var ajuste = await anulacionMovimientoService.AnularAsync(
-            new AnularMovimientoRequest(negocioId, movimientoId, request.Motivo, usuarioId, hoy),
+            new AnularMovimientoRequest(
+                negocioId, movimientoId, request.Motivo, usuarioId, hoy, request.ClaveIdempotencia),
             cancellationToken);
 
         var respuesta = new MovimientoResponse(

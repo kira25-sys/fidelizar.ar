@@ -37,4 +37,31 @@ public interface IMiembroRepository
         int negocioId, IReadOnlyList<string> palabrasNormalizadas, CancellationToken cancellationToken = default);
 
     Task<Miembro> AddAsync(Miembro miembro, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// F1-14 "Socios sin vincular": the members of this business with no <c>ClienteExternoId</c>
+    /// yet, oldest registration first. Not a listing of the roster — it is the complement of one
+    /// (FUNCTIONAL-SPEC §4 "buscar, nunca listar"): every linked member is excluded by
+    /// construction, and it shrinks to empty as the work gets done.
+    /// </summary>
+    Task<IReadOnlyList<Miembro>> ListarSinVincularAsync(
+        int negocioId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes <paramref name="clienteExternoId"/> onto a member that has none. Returns
+    /// <c>false</c> when no unlinked member matched — either it does not exist for this
+    /// <paramref name="negocioId"/> (I8) or another request linked it first; the caller decides
+    /// which, having already looked it up.
+    /// </summary>
+    /// <exception cref="Fidelizar.Domain.Exceptions.ConflictException">
+    /// The id is already linked to another member of this business — the partial unique index on
+    /// <c>(NegocioId, ClienteExternoId)</c> rejecting the write (<c>CLIENTE_EXTERNO_ID_DUPLICADO</c>,
+    /// DATA-MODEL §3).
+    /// </exception>
+    Task<bool> VincularClienteExternoAsync(
+        int negocioId,
+        int miembroId,
+        string clienteExternoId,
+        DateTime ahoraUtc,
+        CancellationToken cancellationToken = default);
 }

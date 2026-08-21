@@ -560,6 +560,77 @@ paths:
         "401":
           $ref: '#/components/responses/Unauthorized'
 
+  # ---------------------------------------------------------------------
+  # F1-14 · Socios sin vincular — implemented
+  # ---------------------------------------------------------------------
+  /miembros/sin-vincular:
+    get:
+      tags: [Miembros]
+      summary: F1-14 Members with no ClienteExternoId (Encargada/Dueño)
+      x-status: implemented
+      description: >
+        Backed by IVinculacionMiembroService.ListarSinVincularAsync. A member registered at the
+        counter (S5) has no ClienteExternoId, so nothing accrues to it when sales are imported
+        (DATA-MODEL §3) — this is the list that keeps that from happening silently. Never phone
+        or DNI: linking a POS id does not need them.
+      security: [{ cookieAuth: [] }]
+      responses:
+        "200":
+          description: OK — oldest first, so the longest wait is at the top.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MiembroSinVincularResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+
+  /miembros/{miembroId}/vinculacion:
+    post:
+      tags: [Miembros]
+      summary: F1-14 Link a member to a POS customer id (Encargada/Dueño)
+      x-status: implemented
+      description: >
+        Backed by IVinculacionMiembroService.VincularAsync. The uniqueness of
+        (NegocioId, ClienteExternoId) is guaranteed by a partial unique index in Postgres, not
+        only by this check — two concurrent requests claiming the same id cannot both win.
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/MiembroId'
+        - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VincularClienteExternoRequest' }
+      responses:
+        "200":
+          description: Linked — echoes the id as recorded, not as typed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VinculacionClienteExternoResponse' }
+        "400":
+          description: CLIENTE_EXTERNO_ID_REQUERIDO (missing or blank).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "404":
+          description: >
+            No such member in this business. A member of another business answers exactly the
+            same way, so the response never reveals that the id exists elsewhere (I8).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        "409":
+          description: >
+            MIEMBRO_YA_VINCULADO (this member already carries an id) or
+            CLIENTE_EXTERNO_ID_DUPLICADO (another member of this business already claims it).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+
 components:
   securitySchemes:
     cookieAuth:
@@ -690,6 +761,37 @@ components:
         saldo: { type: number, format: double }
         fechaAlta: { type: string, format: date, description: Shown only to disambiguate homonyms. }
         corteFecha: { type: string, format: date }
+
+    MiembroSinVincularResponse:
+      type: object
+      description: >
+        F1-14 — one member still without a ClienteExternoId. No phone and no DNI: Shared is
+        compiled into the browser and linking a POS id needs neither. fechaAlta is what tells
+        the Encargada how long the member has been waiting.
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        numeroSocio: { type: string, nullable: true }
+        fechaAlta: { type: string, format: date }
+        sucursalId: { type: integer, nullable: true }
+
+    VincularClienteExternoRequest:
+      type: object
+      required: [clienteExternoId]
+      description: F1-14 — the POS customer id to link the member to.
+      properties:
+        clienteExternoId: { type: string }
+
+    VinculacionClienteExternoResponse:
+      type: object
+      description: >
+        F1-14 — the member as it stands after the link, so the screen confirms the exact id that
+        was recorded rather than echoing what was typed.
+      properties:
+        miembroId: { type: integer }
+        nombre: { type: string }
+        clienteExternoId: { type: string }
+        vinculadoEn: { type: string, format: date-time }
 
     FichaMostradorResponse:
       type: object

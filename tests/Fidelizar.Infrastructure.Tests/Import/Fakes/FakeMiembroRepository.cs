@@ -17,6 +17,12 @@ public sealed class FakeMiembroRepository : IMiembroRepository
     private static readonly PropertyInfo IdProperty =
         typeof(Miembro).GetProperty(nameof(Miembro.Id))!;
 
+    private static readonly PropertyInfo ClienteExternoIdProperty =
+        typeof(Miembro).GetProperty(nameof(Miembro.ClienteExternoId))!;
+
+    private static readonly PropertyInfo ActualizadoEnProperty =
+        typeof(Miembro).GetProperty(nameof(Miembro.ActualizadoEn))!;
+
     private readonly List<Miembro> _miembros = [];
     private int _nextId = 1;
 
@@ -42,5 +48,34 @@ public sealed class FakeMiembroRepository : IMiembroRepository
         IdProperty.SetValue(miembro, _nextId++);
         _miembros.Add(miembro);
         return Task.FromResult(miembro);
+    }
+
+    // Not exercised by the importer — a minimal, correct implementation only, so this fake keeps
+    // satisfying IMiembroRepository as it grows (F1-14).
+    public Task<IReadOnlyList<Miembro>> ListarSinVincularAsync(
+        int negocioId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<Miembro>>(_miembros
+            .Where(m => m.NegocioId == negocioId && m.ClienteExternoId is null)
+            .OrderBy(m => m.FechaAlta)
+            .ToList());
+
+    public Task<bool> VincularClienteExternoAsync(
+        int negocioId,
+        int miembroId,
+        string clienteExternoId,
+        DateTime ahoraUtc,
+        CancellationToken cancellationToken = default)
+    {
+        var miembro = _miembros.FirstOrDefault(
+            m => m.NegocioId == negocioId && m.Id == miembroId && m.ClienteExternoId is null);
+
+        if (miembro is null)
+        {
+            return Task.FromResult(false);
+        }
+
+        ClienteExternoIdProperty.SetValue(miembro, clienteExternoId);
+        ActualizadoEnProperty.SetValue(miembro, ahoraUtc);
+        return Task.FromResult(true);
     }
 }

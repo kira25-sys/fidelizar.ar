@@ -1,7 +1,9 @@
 using Fidelizar.Domain.Entities;
+using Fidelizar.Domain.Exceptions;
 using Fidelizar.Domain.Repositories;
 using Fidelizar.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Fidelizar.Infrastructure.Repositories;
 
@@ -44,4 +46,55 @@ public sealed class MiembroRepository(FidelizarDbContext dbContext) : IMiembroRe
         await dbContext.SaveChangesAsync(cancellationToken);
         return miembro;
     }
+
+    /// <summary>Oldest first: the member who has been unlinked longest is the one accruing
+    /// nothing for longest (ROADMAP F1-14). No cap — a capped work queue hides work.</summary>
+    public async Task<IReadOnlyList<Miembro>> ListarSinVincularAsync(
+        int negocioId, CancellationToken cancellationToken = default) =>
+        await dbContext.Miembros
+            .Where(m => m.NegocioId == negocioId && m.ClienteExternoId == null)
+            .OrderBy(m => m.FechaAlta)
+            .ThenBy(m => m.Id)
+            .ToListAsync(cancellationToken);
+
+    /// <summary>
+    /// The <c>ClienteExternoId IS NULL</c> predicate is the write's own guard: two concurrent
+    /// requests for the same member cannot both link it, and the loser gets 0 rows rather than
+    /// overwriting the winner's id. The duplicate-id race is closed by the partial unique index,
+    /// translated below (DATA-MODEL §3).
+    /// </summary>
+    public async Task<bool> VincularClienteExternoAsync(
+        int negocioId,
+        int miembroId,
+        string clienteExternoId,
+        DateTime ahoraUtc,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var filas = await dbContext.Miembros
+                .Where(m => m.NegocioId == negocioId && m.Id == miembroId && m.ClienteExternoId == null)
+                .ExecuteUpdateAsync(
+                    s => s
+                        .SetProperty(m => m.ClienteExternoId, clienteExternoId)
+                        .SetProperty(m => m.ActualizadoEn, ahoraUtc),
+                    cancellationToken);
+
+            return filas > 0;
+        }
+        catch (Exception ex) when (EsViolacionDeClienteExternoIdDuplicado(ex))
+        {
+            throw new ConflictException(
+                $"Ya hay un socio vinculado al id de POS '{clienteExternoId}' en este negocio.",
+                "CLIENTE_EXTERNO_ID_DUPLICADO");
+        }
+    }
+
+    /// <summary>ExecuteUpdate surfaces the Postgres error directly; a tracked SaveChanges would
+    /// wrap it in DbUpdateException. Both shapes are recognised so this keeps working if the
+    /// write above ever changes form.</summary>
+    private static bool EsViolacionDeClienteExternoIdDuplicado(Exception ex) =>
+        (ex as PostgresException ?? ex.InnerException as PostgresException) is { } pg
+        && pg.SqlState == PostgresErrorCodes.UniqueViolation
+        && pg.ConstraintName == "IX_Miembros_NegocioId_ClienteExternoId";
 }

@@ -5,6 +5,7 @@
 @using Fidelizar.Client.Formatting
 @using Fidelizar.Client.Services
 @using Fidelizar.Shared.Miembros
+@using Fidelizar.Shared.Movimientos
 @using System.Net
 @inject IApiClient ApiClient
 @inject NavigationManager Navigation
@@ -72,16 +73,29 @@ else if (_ficha is not null)
             <p class="ficha-socio__revision">Saldo en revisión — consultá con la encargada.</p>
         }
 
-        @* F1-07 wires this button to open S4's redemption dialog (FLOW-S2-S5.md §3) — a native
-           <dialog>, not a page navigation. Out of this task's scope: only the button that S3's
-           own layout requires is built here, with no click handler yet. *@
+        @if (_canjeRegistrado)
+        {
+            <p class="badge badge--success ficha-socio__confirmacion" role="status">Canje registrado.</p>
+        }
+
         <button
             type="button"
             class="btn btn--primary ficha-socio__boton-canje"
             disabled="@(_ficha.Saldo < 0)"
-            aria-disabled="@(_ficha.Saldo < 0 ? "true" : "false")">
+            aria-disabled="@(_ficha.Saldo < 0 ? "true" : "false")"
+            @ref="_botonCanje"
+            @onclick="AbrirCanjeAsync">
             Registrar canje
         </button>
+
+        <RegistrarCanjeDialog
+            @ref="_dialogoCanje"
+            MiembroId="_ficha.Id"
+            Nombre="_ficha.Nombre"
+            Saldo="_ficha.Saldo"
+            CorteFecha="_ficha.CorteFecha"
+            OnCanjeRegistrado="CanjeRegistrado"
+            OnCerrado="DevolverFocoAlBoton" />
 
         @* S6 and S7's only way in (F1-10). Rendered for Encargada/Dueño only, and that is
            presentation, not protection: both endpoints carry EncargadaOrAbove server-side and a
@@ -110,6 +124,10 @@ else if (_ficha is not null)
     private ElementReference _focusTarget;
     private int? _cargadoParaId;
     private CancellationTokenSource? _cts;
+    private RegistrarCanjeDialog? _dialogoCanje;
+    private ElementReference _botonCanje;
+    private bool _canjeRegistrado;
+    private bool _focoAlBotonCanje;
 
     private AlertaMiembro? Cumpleanos => _ficha?.Alertas.FirstOrDefault(a => a.Tipo == "Cumpleanos");
 
@@ -135,6 +153,43 @@ else if (_ficha is not null)
             _pendingFocus = false;
             await _focusTarget.FocusAsync();
         }
+        else if (_focoAlBotonCanje)
+        {
+            _focoAlBotonCanje = false;
+            await _botonCanje.FocusAsync();
+        }
+    }
+
+    private async Task AbrirCanjeAsync()
+    {
+        _canjeRegistrado = false;
+
+        if (_dialogoCanje is not null)
+        {
+            await _dialogoCanje.AbrirAsync();
+        }
+    }
+
+    /// <summary>"The new balance is shown immediately" (FUNCTIONAL-SPEC §6) — taken from the
+    /// response, not by re-fetching the ficha.</summary>
+    private void CanjeRegistrado(CanjeResponse respuesta)
+    {
+        if (_ficha is not null)
+        {
+            _ficha = _ficha with { Saldo = respuesta.SaldoResultante };
+        }
+
+        _canjeRegistrado = true;
+    }
+
+    /// <summary>A closed dialog returns focus to what opened it (DESIGN-SYSTEM §9.2).</summary>
+    private void DevolverFocoAlBoton()
+    {
+        // A negative balance disables the button, so there would be nothing to focus.
+        if (_ficha is not null && _ficha.Saldo >= 0)
+        {
+            _focoAlBotonCanje = true;
+        }
     }
 
     private async Task CargarAsync()
@@ -149,6 +204,11 @@ else if (_ficha is not null)
         _corteNoDeclarado = false;
         _noEncontrado = false;
         _ficha = null;
+        _canjeRegistrado = false;
+
+        // A different member at the counter makes a half-filled canje actively misleading
+        // (FLOW-S2-S5.md §3.7).
+        _dialogoCanje?.LimpiarBorrador();
         StateHasChanged();
 
         var resultado = await ApiClient.GetAsync<FichaMostradorResponse>(

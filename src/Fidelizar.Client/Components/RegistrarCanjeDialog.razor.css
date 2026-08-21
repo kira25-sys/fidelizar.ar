@@ -1,0 +1,203 @@
+/* S4's dialog (FLOW-S2-S5.md §3.2). Every value comes from tokens.css — no literals. */
+
+.canje {
+  width: min(32rem, calc(100vw - var(--space-6)));
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-modal);
+}
+
+.canje::backdrop {
+  background: rgba(20, 23, 26, 0.45);
+}
+
+.canje__cerrar-form {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.canje__cerrar {
+  min-width: var(--control-size-min);
+  min-height: var(--control-size-min);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  cursor: pointer;
+}
+
+.canje__cerrar:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+
+.canje__titulo {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+  line-height: var(--line-height-tight);
+}
+
+.canje__saldo {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+}
+
+.canje__saldo .amount {
+  color: var(--color-text);
+  font-weight: var(--font-weight-bold);
+}
+
+.canje__banner {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  /* Colour is never the only signal — DESIGN-SYSTEM §11. */
+  border-left: 4px solid;
+}
+
+.canje__banner p {
+  margin: 0;
+}
+
+.canje__banner .btn {
+  margin-top: var(--space-3);
+}
+
+.canje__banner--danger {
+  background: var(--color-danger-bg);
+  border-left-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.canje__banner--warning {
+  background: var(--color-warning-bg);
+  border-left-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.canje__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field label,
+.canje__motivos legend {
+  font-weight: var(--font-weight-medium);
+}
+
+.canje__monto {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.canje__signo {
+  font-size: var(--text-lg);
+  color: var(--color-text-muted);
+}
+
+.canje__monto .input {
+  flex: 1;
+}
+
+.canje__ayuda {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.canje__motivos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.canje__motivos legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+}
+
+.canje__chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-size-comfortable);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.canje__chip input {
+  /* The radio itself is off-screen, never display:none — it stays focusable and announced. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.canje__chip:hover {
+  background: var(--color-surface-sunken);
+}
+
+.canje__chip:has(input:checked) {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.canje__chip:has(input:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--color-focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Suggested, not selected: a dashed ring, so the nudge is never mistaken for a choice
+   already made (FLOW-S2-S5.md §3.3). */
+.canje__chip--sugerido {
+  border-style: dashed;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.canje__otro {
+  flex-basis: 100%;
+}
+
+.canje__acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.canje__acciones .btn--primary {
+  min-height: var(--control-size-primary);
+}
+
+@media (max-width: 639px) {
+  .canje__acciones {
+    flex-direction: column-reverse;
+  }
+
+  .canje__acciones .btn {
+    width: 100%;
+  }
+}

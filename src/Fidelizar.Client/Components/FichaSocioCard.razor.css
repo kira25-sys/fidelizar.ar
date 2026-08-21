@@ -102,3 +102,9 @@
     width: 100%;
   }
 }
+
+/* S4's confirmation, shown on S3 after the dialog closes (FLOW-S2-S5.md §3.6). */
+.ficha-socio__confirmacion {
+  align-self: flex-start;
+  margin: 0 0 var(--space-3);
+}

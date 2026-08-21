@@ -1,0 +1,123 @@
+/* F1-14's dialog. Every value comes from tokens.css — no literals. */
+
+.vincular {
+  width: min(34rem, calc(100vw - var(--space-6)));
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-modal);
+}
+
+/* The same scrim S4 and S8 use; ::backdrop has no surface token to inherit. */
+.vincular::backdrop {
+  background: rgba(20, 23, 26, 0.45);
+}
+
+.vincular__cerrar-form {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.vincular__cerrar {
+  min-width: var(--control-size-min);
+  min-height: var(--control-size-min);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .vincular__cerrar:hover {
+    background: var(--color-surface-sunken);
+    color: var(--color-text);
+  }
+}
+
+.vincular__titulo {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xl);
+  line-height: var(--line-height-tight);
+}
+
+/* Why this screen exists, before the field: an unlinked socio accrues nothing (DATA-MODEL §3). */
+.vincular__explicacion {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.vincular__banner {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  /* Colour is never the only signal — DESIGN-SYSTEM §11. */
+  border-left: 4px solid;
+}
+
+.vincular__banner p {
+  margin: 0;
+}
+
+.vincular__banner .btn {
+  margin-top: var(--space-3);
+}
+
+.vincular__banner--danger {
+  background: var(--color-danger-bg);
+  border-left-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.vincular__banner--warning {
+  background: var(--color-warning-bg);
+  border-left-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+.vincular__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+}
+
+.vincular__form .field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vincular__form label {
+  font-weight: var(--font-weight-medium);
+}
+
+.vincular__ayuda {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.vincular__acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.vincular__acciones .btn--primary {
+  min-height: var(--control-size-primary);
+}
+
+@media (max-width: 639px) {
+  .vincular__acciones {
+    flex-direction: column-reverse;
+  }
+
+  .vincular__acciones .btn {
+    width: 100%;
+  }
+}

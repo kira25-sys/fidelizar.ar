@@ -1,0 +1,168 @@
+.sin-vincular h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.sin-vincular__subtitulo {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.sin-vincular__sin-permiso {
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.sin-vincular__sin-permiso-titulo {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.sin-vincular__sin-permiso a.btn {
+  margin-top: var(--space-4);
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+/* A link recorded is good news, not an alert — success tokens, and never colour alone. */
+.sin-vincular__exito {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-5) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 4px solid var(--color-success);
+  border-radius: var(--radius-md);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  font-weight: var(--font-weight-medium);
+}
+
+.sin-vincular__estado,
+.sin-vincular__vacio {
+  margin: var(--space-5) 0 0;
+  color: var(--color-text-muted);
+}
+
+.sin-vincular__cuenta {
+  margin: var(--space-5) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.sin-vincular__tabla {
+  width: 100%;
+  margin-top: var(--space-3);
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.sin-vincular__tabla th,
+.sin-vincular__tabla td {
+  padding: var(--space-3);
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sin-vincular__tabla thead th {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.sin-vincular__col-accion {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Secondary, not primary: thirty bright buttons down a back-office list emphasise nothing. The
+   primary weight belongs to the dialog's confirm. --control-size-comfortable, never below 44px
+   (DESIGN-SYSTEM §7). */
+.sin-vincular__vincular {
+  min-height: var(--control-size-comfortable);
+}
+
+.sin-vincular__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.sin-vincular__volver {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-size-comfortable);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+
+/* Hover is guarded so it does not stick after a tap (DESIGN-SYSTEM §8.1). */
+@media (hover: hover) and (pointer: fine) {
+  .sin-vincular__volver:hover {
+    text-decoration: underline;
+  }
+}
+
+/* Narrow: every row becomes a stacked, labelled block — never a horizontally scrolling table,
+   which hides columns behind a gesture nobody discovers (DESIGN-SYSTEM §10.1). */
+@media (max-width: 639px) {
+  .sin-vincular__tabla,
+  .sin-vincular__tabla tbody,
+  .sin-vincular__tabla tr,
+  .sin-vincular__tabla th,
+  .sin-vincular__tabla td {
+    display: block;
+  }
+
+  .sin-vincular__tabla thead {
+    display: none;
+  }
+
+  .sin-vincular__tabla tbody tr {
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border-strong);
+  }
+
+  .sin-vincular__tabla tbody td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-1) 0;
+    border-bottom: none;
+  }
+
+  .sin-vincular__tabla tbody td::before {
+    content: attr(data-etiqueta);
+    flex: 0 0 auto;
+    color: var(--color-text-muted);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* The action cell has no label to print, and its button takes the full row width. */
+  .sin-vincular__col-accion {
+    display: block;
+    padding: var(--space-3) 0 0;
+    text-align: left;
+  }
+
+  .sin-vincular__vincular {
+    width: 100%;
+  }
+
+  .sin-vincular__acciones .btn {
+    width: 100%;
+  }
+}

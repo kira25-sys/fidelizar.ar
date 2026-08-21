@@ -1,7 +1,9 @@
+using Fidelizar.Domain.Operaciones;
 using Fidelizar.Domain.Persistence;
 using Fidelizar.Domain.Repositories;
 using Fidelizar.Domain.Security;
 using Fidelizar.Infrastructure.Import;
+using Fidelizar.Infrastructure.Operaciones;
 using Fidelizar.Infrastructure.Persistence;
 using Fidelizar.Infrastructure.Repositories;
 using Fidelizar.Infrastructure.Security;
@@ -42,6 +44,11 @@ public static class InfrastructureConfigurationExtensions
         services.AddScoped<IConsentimientoRepository, ConsentimientoRepository>();
         services.AddScoped<ISucursalRepository, SucursalRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        // ARCHITECTURE §14: the readiness probe and the alert seam. Api's health check depends on
+        // these two interfaces, never on FidelizarDbContext (ARCHITECTURE §3).
+        services.AddScoped<IPersistenceProbe, PersistenceProbe>();
+        services.AddSingleton<IAlertaOperativa, AlertaOperativaEnLog>();
 
         // ARCHITECTURE §3: Application depends on IPasswordHasher only, never on ASP.NET Core
         // Identity directly — this is the one place that wires the real implementation in.

@@ -4,6 +4,13 @@
     <ProjectReference Include="..\Fidelizar.Application\Fidelizar.Application.csproj" />
     <ProjectReference Include="..\Fidelizar.Infrastructure\Fidelizar.Infrastructure.csproj" />
     <ProjectReference Include="..\Fidelizar.Shared\Fidelizar.Shared.csproj" />
+    <!--
+      ARCHITECTURE §3 "One deployable unit": Api serves the compiled WebAssembly client as static
+      files from the same origin. This reference is what brings the client's published output into
+      Api's wwwroot (_framework/ and the rest) — it is a hosting arrow, not a layering one, so it
+      does not let Api call into Client code (Client only exposes Blazor components).
+    -->
+    <ProjectReference Include="..\Fidelizar.Client\Fidelizar.Client.csproj" />
   </ItemGroup>
 
   <ItemGroup>

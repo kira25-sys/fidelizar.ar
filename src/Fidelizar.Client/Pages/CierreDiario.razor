@@ -1,0 +1,362 @@
+@page "/cierre-diario"
+@inherits BackOfficePageBase
+@using System.Net
+@using System.Text
+@using Fidelizar.Client.Api
+@using Fidelizar.Client.Formatting
+@using Fidelizar.Shared.Sucursales
+@inject IApiClient ApiClient
+
+@* S9 Cierre diario de canjes (FUNCTIONAL-SPEC §3, §9 — Encargada and Dueño, never Cajero): one
+   branch's canjes for one day, totals at the foot, exportable.
+
+   The branch picker is the Dueño's alone, because the role is what fixes the branch: an Encargada
+   has exactly one and it travels in her session, a Dueño has none and reads the list from
+   /api/sucursales (already DuenoOnly). None of this is a permission check — the endpoint carries
+   EncargadaOrAbove and refuses an Encargada asking for another branch (ARCHITECTURE §8); that 403
+   is handled below.
+
+   No saldo is rendered here, so there is no cutoff date to carry (R3): a canje is a movement, not
+   anyone's balance. *@
+
+<PageTitle>Cierre diario de canjes — Fidelizar</PageTitle>
+
+@if (!SessionService.IsAuthenticated)
+{
+    @* Redirecting to S1: render nothing rather than flash a screen this reader may not see. *@
+}
+else
+{
+    <div class="card cierre">
+        <h1 tabindex="-1">Cierre diario de canjes</h1>
+
+        @if (!Autorizado || _sinPermiso)
+        {
+            @* A 403 is not retried — it is the answer. It names no branch and no user. *@
+            <div class="cierre__sin-permiso" role="alert">
+                <p class="cierre__sin-permiso-titulo">Esta pantalla es para la encargada o el dueño.</p>
+                <p>@(_mensajeSinPermiso.Length > 0 ? _mensajeSinPermiso : "Si necesitás el cierre del día, pedíselo a la encargada.")</p>
+                <a class="btn btn--secondary" href="/">Volver a la búsqueda</a>
+            </div>
+        }
+        else
+        {
+            <p class="cierre__subtitulo">
+                Los canjes registrados en la sucursal durante el día elegido.
+            </p>
+
+            <div class="cierre__controles">
+                <div class="cierre__campo">
+                    <label for="cierre-fecha">Fecha</label>
+                    <input
+                        id="cierre-fecha"
+                        class="input"
+                        type="date"
+                        max="@Hoy.ToString("yyyy-MM-dd")"
+                        value="@_fecha.ToString("yyyy-MM-dd")"
+                        @onchange="CambiarFechaAsync" />
+                </div>
+
+                @if (EsDueno)
+                {
+                    <div class="cierre__campo">
+                        <label for="cierre-sucursal">Sucursal</label>
+                        <select
+                            id="cierre-sucursal"
+                            class="input"
+                            value="@_sucursalId"
+                            @onchange="CambiarSucursalAsync">
+                            @foreach (var sucursal in _sucursales)
+                            {
+                                <option value="@sucursal.Id">
+                                    @sucursal.Nombre@(sucursal.Activa ? "" : " (inactiva)")
+                                </option>
+                            }
+                        </select>
+                    </div>
+                }
+            </div>
+
+            @if (_sinSucursalPropia)
+            {
+                <p class="cierre__aviso">
+                    <span aria-hidden="true">⚠</span>
+                    Tu usuario no tiene una sucursal asignada, así que no podemos armar el cierre.
+                    Pedile al dueño que te asigne una.
+                </p>
+            }
+            else if (_negocioSinSucursales)
+            {
+                <p class="cierre__aviso">
+                    <span aria-hidden="true">⚠</span>
+                    Todavía no hay sucursales cargadas, así que no hay cierre que armar.
+                    Creá una en Usuarios y sucursales.
+                </p>
+            }
+            else if (_cargando)
+            {
+                <p class="cierre__estado" role="status" aria-live="polite">Cargando el cierre del día…</p>
+            }
+            else if (_problem is not null)
+            {
+                <ErrorNotice Problem="_problem" OnRetry="CargarAsync" />
+            }
+            else if (_cierre is not null)
+            {
+                <div class="cierre__resumen">
+                    <div>
+                        <p class="cierre__resumen-etiqueta">Total canjeado</p>
+                        <p class="cierre__resumen-monto amount">@MoneyFormatter.Format(_cierre.TotalCanjeado)</p>
+                    </div>
+                    <div>
+                        <p class="cierre__resumen-etiqueta">Canjes</p>
+                        <p class="cierre__resumen-monto">@_cierre.Movimientos.Count</p>
+                    </div>
+                    <div class="cierre__resumen-dia">
+                        <p class="cierre__resumen-etiqueta">Día</p>
+                        <p class="cierre__resumen-fecha">@FechaFormatter.Corta(_cierre.Fecha)</p>
+                    </div>
+                </div>
+
+                @if (_cierre.Movimientos.Count == 0)
+                {
+                    @* A day with no canjes is a normal day, not a failure: neutral tone
+                       (DESIGN-SYSTEM §11.2). *@
+                    <p class="cierre__vacio">
+                        No hubo canjes en esta sucursal el @FechaFormatter.Corta(_cierre.Fecha).
+                    </p>
+                }
+                else
+                {
+                    @* role="table" and friends are explicit: at narrow width these cells become
+                       display:block, which drops the implicit table semantics (DESIGN-SYSTEM §10.1). *@
+                    <table class="cierre__tabla" role="table">
+                        <caption class="visually-hidden">
+                            Canjes del día en esta sucursal, con el total al pie.
+                        </caption>
+                        <thead role="rowgroup">
+                            <tr role="row">
+                                <th scope="col" role="columnheader">Socio</th>
+                                <th scope="col" role="columnheader" class="cierre__col-num">Monto</th>
+                                <th scope="col" role="columnheader">Cajero</th>
+                                <th scope="col" role="columnheader">Hora de registro</th>
+                                <th scope="col" role="columnheader">Motivo</th>
+                            </tr>
+                        </thead>
+                        <tbody role="rowgroup">
+                            @foreach (var movimiento in _cierre.Movimientos)
+                            {
+                                <tr role="row">
+                                    <td role="cell" data-etiqueta="Socio">@movimiento.MiembroNombre</td>
+                                    <td role="cell" data-etiqueta="Monto" class="cierre__col-num amount">
+                                        @MoneyFormatter.Format(movimiento.Monto)
+                                    </td>
+                                    <td role="cell" data-etiqueta="Cajero">@movimiento.CajeroNombre</td>
+                                    <td role="cell" data-etiqueta="Hora de registro">@FechaFormatter.ConHora(movimiento.Hora)</td>
+                                    <td role="cell" data-etiqueta="Motivo">@(string.IsNullOrEmpty(movimiento.Motivo) ? "—" : movimiento.Motivo)</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot role="rowgroup">
+                            <tr role="row">
+                                <th scope="row" role="rowheader">Total canjeado</th>
+                                <td role="cell" data-etiqueta="Total canjeado" class="cierre__col-num amount">
+                                    @MoneyFormatter.Format(_cierre.TotalCanjeado)
+                                </td>
+                                <td role="cell" colspan="3"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                }
+
+                <div class="cierre__acciones">
+                    @* The file is built in the browser from the same response on screen — there is
+                       no export endpoint and none is needed. *@
+                    <a
+                        class="btn btn--secondary cierre__descargar"
+                        href="@_csvHref"
+                        download="@_csvNombre">
+                        Descargar CSV
+                    </a>
+                    <a class="cierre__volver" href="/"><span aria-hidden="true">←</span> Volver a la búsqueda</a>
+                </div>
+
+                <div class="cierre__leyenda">
+                    <p>
+                        <strong>Hora de registro</strong> es cuándo lo recibió el sistema. Un canje
+                        anotado en papel y cargado al día siguiente aparece en el cierre del día en que
+                        pasó, con la fecha y hora en que se cargó.
+                    </p>
+                    <p>
+                        El cierre incluye los canjes registrados por los cajeros de esta sucursal,
+                        aunque el socio sea de otra.
+                    </p>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Now);
+
+    private readonly List<SucursalResponse> _sucursales = [];
+    private DateOnly _fecha = Hoy;
+    private int? _sucursalId;
+    private CierreDiarioResponse? _cierre;
+    private ApiProblem? _problem;
+    private bool _cargando;
+    private bool _sinPermiso;
+    private bool _sinSucursalPropia;
+    private bool _negocioSinSucursales;
+    private string _mensajeSinPermiso = string.Empty;
+    private string _csvHref = string.Empty;
+    private string _csvNombre = string.Empty;
+    private CancellationTokenSource? _cts;
+
+    private bool EsDueno => SessionService.Current?.Rol == Roles.Dueno;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!SessionService.IsAuthenticated || !Autorizado)
+        {
+            return;
+        }
+
+        if (EsDueno)
+        {
+            await CargarSucursalesAsync();
+        }
+        else
+        {
+            // DATA-MODEL §2: an Encargada always has a branch. Without one there is no cierre.
+            _sucursalId = SessionService.Current?.SucursalId;
+            _sinSucursalPropia = _sucursalId is null;
+        }
+
+        if (_sucursalId is not null)
+        {
+            await CargarAsync();
+        }
+    }
+
+    private async Task CargarSucursalesAsync()
+    {
+        _cargando = true;
+        StateHasChanged();
+
+        var respuesta = await ApiClient.GetAsync<List<SucursalResponse>>("api/sucursales");
+
+        _cargando = false;
+
+        if (!respuesta.Success)
+        {
+            Fallar(respuesta.Problem!);
+            return;
+        }
+
+        _sucursales.Clear();
+        _sucursales.AddRange(respuesta.Value);
+
+        // The first active one, or the first there is: a business with no branch has no cierre.
+        _sucursalId = _sucursales.FirstOrDefault(s => s.Activa)?.Id ?? _sucursales.FirstOrDefault()?.Id;
+        _negocioSinSucursales = _sucursalId is null;
+    }
+
+    private async Task CargarAsync()
+    {
+        if (_sucursalId is not { } sucursalId)
+        {
+            return;
+        }
+
+        // Each change of date or branch cancels the previous request: a late response must not
+        // overwrite the one the reader is looking at.
+        _cts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+
+        _cargando = true;
+        _problem = null;
+        _sinPermiso = false;
+        _cierre = null;
+        StateHasChanged();
+
+        var fecha = _fecha.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var respuesta = await ApiClient.GetAsync<CierreDiarioResponse>(
+            $"api/sucursales/{sucursalId}/cierre-diario?fecha={fecha}", cts.Token);
+
+        if (cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _cargando = false;
+
+        if (respuesta.Success)
+        {
+            _cierre = respuesta.Value;
+            PrepararDescarga(_cierre);
+        }
+        else
+        {
+            Fallar(respuesta.Problem!);
+        }
+
+        StateHasChanged();
+    }
+
+    private void Fallar(ApiProblem problem)
+    {
+        if (problem.StatusCode == HttpStatusCode.Forbidden)
+        {
+            _sinPermiso = true;
+            _mensajeSinPermiso = problem.Message;
+        }
+        else
+        {
+            _problem = problem;
+        }
+    }
+
+    private async Task CambiarFechaAsync(ChangeEventArgs args)
+    {
+        // An empty or half-typed date fires no request — the previous day stays on screen.
+        if (DateOnly.TryParse(args.Value?.ToString(), out var elegida) && elegida != _fecha)
+        {
+            _fecha = elegida;
+            await CargarAsync();
+        }
+    }
+
+    private async Task CambiarSucursalAsync(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var elegida) && elegida != _sucursalId)
+        {
+            _sucursalId = elegida;
+            await CargarAsync();
+        }
+    }
+
+    /// <summary>Built once per response, not on every render.</summary>
+    private void PrepararDescarga(CierreDiarioResponse cierre)
+    {
+        var csv = CierreDiarioCsv.Construir(cierre, NombreSucursal(cierre.SucursalId));
+        var bytes = Encoding.UTF8.GetBytes(csv);
+
+        // A base64 data: URI, not a Blob — no JS interop and no second round trip, and a day's
+        // cierre is tens of rows, not megabytes.
+        _csvHref = $"data:text/csv;charset=utf-8;base64,{Convert.ToBase64String(bytes)}";
+        _csvNombre = CierreDiarioCsv.NombreArchivo(cierre);
+    }
+
+    /// <summary>The name when we have it: an Encargada cannot read /api/sucursales.</summary>
+    private string NombreSucursal(int sucursalId) =>
+        _sucursales.FirstOrDefault(s => s.Id == sucursalId)?.Nombre ?? $"Sucursal {sucursalId}";
+
+    public override void Dispose()
+    {
+        _cts?.Cancel();
+        base.Dispose();
+    }
+}

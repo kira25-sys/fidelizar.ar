@@ -1,0 +1,251 @@
+.cierre h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.cierre__subtitulo {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.cierre__sin-permiso {
+  margin-top: var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.cierre__sin-permiso-titulo {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+}
+
+.cierre__sin-permiso a.btn {
+  margin-top: var(--space-4);
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.cierre__controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+/* Neither control widens to a monitor's full width (DESIGN-SYSTEM §10.2). */
+.cierre__campo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 12rem;
+  max-width: 20rem;
+  flex: 1 1 12rem;
+}
+
+.cierre__campo label {
+  font-weight: var(--font-weight-medium);
+}
+
+/* select carries .input, which is written for a text field. */
+.cierre__campo select.input {
+  min-height: var(--control-size-comfortable);
+  appearance: auto;
+}
+
+.cierre__estado {
+  margin: var(--space-5) 0 0;
+  color: var(--color-text-muted);
+}
+
+.cierre__aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-5) 0 0;
+  padding: var(--space-3);
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.cierre__resumen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-md);
+}
+
+.cierre__resumen-etiqueta {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+/* --text-2xl, not --text-display: nobody reads this over a shoulder — it is the back office,
+   whose budget is density (DESIGN-SYSTEM §1, §5). */
+.cierre__resumen-monto {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.cierre__resumen-fecha {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-tight);
+}
+
+.cierre__vacio {
+  margin: var(--space-5) 0 0;
+  color: var(--color-text-muted);
+}
+
+.cierre__tabla {
+  width: 100%;
+  margin-top: var(--space-5);
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.cierre__tabla th,
+.cierre__tabla td {
+  padding: var(--space-3);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.cierre__tabla thead th {
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--color-border-strong);
+}
+
+.cierre__tabla tfoot th,
+.cierre__tabla tfoot td {
+  border-top: 1px solid var(--color-border-strong);
+  border-bottom: none;
+  font-weight: var(--font-weight-bold);
+}
+
+.cierre__col-num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cierre__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+/* .btn is written for <button>; an <a> carrying it needs the link defaults neutralised. */
+.cierre__descargar {
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.cierre__volver {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-size-comfortable);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-medium);
+  text-decoration: none;
+}
+
+/* Hover is guarded so it does not stick after a tap (DESIGN-SYSTEM §8.1). */
+@media (hover: hover) and (pointer: fine) {
+  .cierre__volver:hover {
+    text-decoration: underline;
+  }
+}
+
+.cierre__leyenda {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.cierre__leyenda p {
+  margin: 0 0 var(--space-2);
+}
+
+/* Narrow: every row becomes a stacked, labelled block — never a horizontally scrolling table,
+   which hides the money column behind a gesture nobody discovers (DESIGN-SYSTEM §10.1). */
+@media (max-width: 639px) {
+  .cierre__tabla,
+  .cierre__tabla tbody,
+  .cierre__tabla tfoot,
+  .cierre__tabla tr,
+  .cierre__tabla th,
+  .cierre__tabla td {
+    display: block;
+  }
+
+  .cierre__tabla thead {
+    display: none;
+  }
+
+  .cierre__tabla tbody tr {
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border-strong);
+  }
+
+  .cierre__tabla tbody td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-1) 0;
+    border-bottom: none;
+  }
+
+  .cierre__tabla tbody td::before {
+    content: attr(data-etiqueta);
+    flex: 0 0 auto;
+    color: var(--color-text-muted);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* The foot keeps the total as one labelled line; the empty spacer cell has nothing to say. */
+  .cierre__tabla tfoot th {
+    padding: var(--space-3) 0 0;
+  }
+
+  .cierre__tabla tfoot td {
+    padding: 0;
+    border: none;
+  }
+
+  .cierre__tabla tfoot td:empty {
+    display: none;
+  }
+
+  .cierre__col-num {
+    text-align: left;
+  }
+
+  .cierre__descargar {
+    width: 100%;
+  }
+}

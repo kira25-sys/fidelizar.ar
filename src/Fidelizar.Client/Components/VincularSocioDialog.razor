@@ -1,0 +1,204 @@
+@* F1-14 Vincular socio — a native <dialog> over the list, never a page navigation (the pattern
+   S4 and S8 already use). No phone and no DNI here: linking a POS code needs neither. *@
+@using Fidelizar.Client.Api
+@using Fidelizar.Shared.Miembros
+@inject IApiClient ApiClient
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<dialog class="vincular" @ref="_dialogo" @onclose="AlCerrar" aria-labelledby="vincular-titulo">
+    <form method="dialog" class="vincular__cerrar-form">
+        <button type="submit" class="vincular__cerrar" aria-label="Cerrar">×</button>
+    </form>
+
+    <h2 id="vincular-titulo" class="vincular__titulo">Vincular a @Nombre</h2>
+
+    <p class="vincular__explicacion">
+        El código de cliente nace en el sistema de ventas, no acá. Hasta que este socio tenga el
+        suyo, sus compras no le acumulan nada.
+    </p>
+
+    @if (_banner is not null)
+    {
+        <div class="vincular__banner vincular__banner--@_banner.Tono" role="alert" tabindex="-1" @ref="_bannerRef">
+            <p>@_banner.Mensaje</p>
+            @if (_banner.OfreceIngresar)
+            {
+                <button type="button" class="btn btn--secondary" @onclick="IrAIngresar">Iniciar sesión</button>
+            }
+            else if (_banner.ListaDesactualizada)
+            {
+                <button type="button" class="btn btn--secondary" @onclick="ActualizarListaAsync">Actualizar la lista</button>
+            }
+        </div>
+    }
+
+    <form class="vincular__form" novalidate @onsubmit="ConfirmarAsync" @onsubmit:preventDefault="true">
+        <div class="field">
+            <label for="vincular-codigo">Código de cliente del POS</label>
+            <input
+                id="vincular-codigo"
+                class="input"
+                type="text"
+                autocomplete="off"
+                @bind="_codigo"
+                @bind:event="oninput"
+                @ref="_codigoInput"
+                aria-invalid="@(_error is null ? "false" : "true")"
+                aria-describedby="vincular-codigo-ayuda @(_error is null ? "" : "vincular-codigo-error")" />
+            <span id="vincular-codigo-ayuda" class="vincular__ayuda">
+                Buscalo en el sistema de ventas, en la ficha de este cliente.
+            </span>
+            @if (_error is not null)
+            {
+                <span id="vincular-codigo-error" class="field-error">@_error</span>
+            }
+        </div>
+
+        <div class="vincular__acciones">
+            <button type="button" class="btn btn--secondary" @onclick="CerrarAsync">Cancelar</button>
+            @* disabled, not only aria-busy: pointer-events blocks the mouse and not Enter,
+               and a second POST here is a second link attempt (DESIGN-SYSTEM §9.5). *@
+            <button
+                type="submit"
+                class="btn btn--primary"
+                disabled="@_enviando"
+                aria-disabled="@(_enviando ? "true" : "false")"
+                aria-busy="@(_enviando ? "true" : "false")">
+                Vincular
+            </button>
+        </div>
+    </form>
+</dialog>
+
+@code {
+    [Parameter, EditorRequired] public int MiembroId { get; set; }
+    [Parameter, EditorRequired] public string Nombre { get; set; } = string.Empty;
+
+    /// <summary>Fires on a 200 — the list drops the row and confirms the id the server recorded.</summary>
+    [Parameter] public EventCallback<VinculacionClienteExternoResponse> OnVinculado { get; set; }
+
+    /// <summary>Fires when the list on screen is known to be stale (a 404 or MIEMBRO_YA_VINCULADO).</summary>
+    [Parameter] public EventCallback OnListaDesactualizada { get; set; }
+
+    /// <summary>Fires whatever closed the dialog — the list returns focus itself (DESIGN-SYSTEM §9.2).</summary>
+    [Parameter] public EventCallback OnCerrado { get; set; }
+
+    private ElementReference _dialogo;
+    private ElementReference _codigoInput;
+    private ElementReference _bannerRef;
+    private IJSObjectReference? _modulo;
+
+    private string _codigo = string.Empty;
+    private string? _error;
+    private VincularSocioRechazo? _banner;
+    private bool _enviando;
+    private bool _focoAlCodigo;
+    private bool _focoAlBanner;
+
+    /// <summary>Opens on a member. The draft is not carried between members: a code typed for one
+    /// socio and confirmed on another is money credited to the wrong person.</summary>
+    public async Task AbrirAsync()
+    {
+        _codigo = string.Empty;
+        _error = null;
+        _banner = null;
+        _enviando = false;
+        _focoAlCodigo = true;
+
+        var modulo = await ObtenerModuloAsync();
+        await modulo.InvokeVoidAsync("abrirModal", _dialogo);
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focoAlCodigo)
+        {
+            _focoAlCodigo = false;
+            await _codigoInput.FocusAsync();
+        }
+        else if (_focoAlBanner)
+        {
+            _focoAlBanner = false;
+            await _bannerRef.FocusAsync();
+        }
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (_enviando)
+        {
+            return;
+        }
+
+        var codigo = _codigo.Trim();
+
+        // A fast Spanish message, nothing more: CLIENTE_EXTERNO_ID_REQUERIDO is the real rule.
+        if (codigo.Length == 0)
+        {
+            _error = "Escribí el código de cliente del POS.";
+            StateHasChanged();
+            await _codigoInput.FocusAsync();
+            return;
+        }
+
+        _enviando = true;
+        _error = null;
+        _banner = null;
+        StateHasChanged();
+
+        var resultado = await ApiClient.PostAsync<VincularClienteExternoRequest, VinculacionClienteExternoResponse>(
+            $"api/miembros/{MiembroId}/vinculacion", new VincularClienteExternoRequest(codigo));
+
+        _enviando = false;
+
+        if (resultado.Success)
+        {
+            var respuesta = resultado.Value;
+            await CerrarAsync();
+            await OnVinculado.InvokeAsync(respuesta);
+            return;
+        }
+
+        _banner = VincularSocioMensajes.Rechazo(resultado.Problem!, Nombre, codigo);
+        _focoAlBanner = true;
+        StateHasChanged();
+    }
+
+    private async Task ActualizarListaAsync()
+    {
+        await CerrarAsync();
+        await OnListaDesactualizada.InvokeAsync();
+    }
+
+    private void IrAIngresar() => Navigation.NavigateTo("/ingreso");
+
+    private async Task CerrarAsync()
+    {
+        var modulo = await ObtenerModuloAsync();
+        await modulo.InvokeVoidAsync("cerrar", _dialogo);
+    }
+
+    /// <summary>The single close path: Esc, the ×, Cancelar and a backdrop click all end here.</summary>
+    private async Task AlCerrar() => await OnCerrado.InvokeAsync();
+
+    private async Task<IJSObjectReference> ObtenerModuloAsync() =>
+        _modulo ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/dialogo.js");
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_modulo is not null)
+        {
+            try
+            {
+                await _modulo.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The browser is already gone; nothing to release.
+            }
+        }
+    }
+}

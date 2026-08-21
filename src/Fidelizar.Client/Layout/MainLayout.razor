@@ -4,10 +4,11 @@
 @implements IDisposable
 
 @* No sidebar nav: FUNCTIONAL-SPEC §1 — search is the entry point, nothing to learn. The
-   exceptions are the back-office screens search cannot reach: S9 for an Encargada or a Dueño,
-   S10 for a Dueño alone. One link each, rendered only for those roles, so a cashier's header is
-   byte for byte the one they had before. Hiding a link is presentation — the endpoints behind
-   them are what actually refuse everyone else (ARCHITECTURE §8). *@
+   exceptions are the back-office screens search cannot reach: S9 and F1-14 "Socios sin vincular"
+   for an Encargada or a Dueño, S10 for a Dueño alone. One link each, rendered only for those
+   roles, so a cashier's header is byte for byte the one they had before. Hiding a link is
+   presentation — the endpoints behind them are what actually refuse everyone else
+   (ARCHITECTURE §8). *@
 
 <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
 
@@ -19,6 +20,7 @@
             @if (EsEncargadaODueno)
             {
                 <a class="app-header__enlace" href="/cierre-diario">Cierre diario</a>
+                <a class="app-header__enlace" href="/socios-sin-vincular">Socios sin vincular</a>
             }
             @if (EsDueno)
             {

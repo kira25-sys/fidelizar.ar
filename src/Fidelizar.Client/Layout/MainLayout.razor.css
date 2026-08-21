@@ -18,14 +18,14 @@
 .app-header__session {
   display: flex;
   align-items: center;
-  /* Two links, a name and a button no longer fit one line on a phone. */
+  /* Three links, a name and a button no longer fit one line on a phone. */
   flex-wrap: wrap;
   gap: var(--space-3);
   color: var(--color-text-muted);
 }
 
-/* The back-office entry points (S9, S10). Sized like any other control so neither is a 20px
-   target in the corner of the header (DESIGN-SYSTEM §7). */
+/* The back-office entry points (S9, F1-14, S10). Sized like any other control so none of them is
+   a 20px target in the corner of the header (DESIGN-SYSTEM §7). */
 .app-header__enlace {
   display: inline-flex;
   align-items: center;

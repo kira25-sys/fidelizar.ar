@@ -1,0 +1,289 @@
+@page "/socios-sin-vincular"
+@inherits BackOfficePageBase
+@using System.Net
+@using Fidelizar.Client.Api
+@using Fidelizar.Client.Formatting
+@using Fidelizar.Shared.Miembros
+@inject IApiClient ApiClient
+
+@* F1-14 Socios sin vincular (ROADMAP F1-14, DATA-MODEL §3 — Encargada and Dueño, never Cajero).
+   A socio registered at the counter (S5) has no ClienteExternoId, so nothing accrues to it when
+   phase 2 imports sales. This screen is what stops that from happening silently.
+
+   No saldo is rendered, so there is no cutoff date to carry (R3), and the response carries
+   neither phone nor DNI — linking a POS code needs neither.
+
+   Autorizado is presentation, never protection: both endpoints carry EncargadaOrAbove and answer
+   403 whatever this renders (ARCHITECTURE §8), which is why that 403 is handled below too. *@
+
+<PageTitle>Socios sin vincular — Fidelizar</PageTitle>
+
+@if (!SessionService.IsAuthenticated)
+{
+    @* Redirecting to S1: render nothing rather than flash a screen this reader may not see. *@
+}
+else
+{
+    <div class="card sin-vincular">
+        <h1 tabindex="-1" @ref="_titulo">Socios sin vincular</h1>
+
+        @if (!Autorizado || _sinPermiso)
+        {
+            @* A 403 is not retried — it is the answer. It names no socio and no user. *@
+            <div class="sin-vincular__sin-permiso" role="alert">
+                <p class="sin-vincular__sin-permiso-titulo">Esta pantalla es para la encargada o el dueño.</p>
+                <p>@(_mensajeSinPermiso.Length > 0 ? _mensajeSinPermiso : "Si un socio quedó sin vincular, avisale a la encargada.")</p>
+                <a class="btn btn--secondary" href="/">Volver a la búsqueda</a>
+            </div>
+        }
+        else
+        {
+            <p class="sin-vincular__subtitulo">
+                Socios dados de alta en el mostrador que todavía no tienen su código de cliente del
+                POS. Hasta que lo tengan, sus compras no les acumulan nada. Primero, el que hace
+                más tiempo que espera.
+            </p>
+
+            @if (_exito is { } exito)
+            {
+                <p class="sin-vincular__exito" role="status" tabindex="-1" @ref="_exitoRef">
+                    <span aria-hidden="true">✓</span>
+                    Listo: @exito.Nombre quedó vinculado con el código «@exito.ClienteExternoId».
+                </p>
+            }
+
+            @if (_cargando)
+            {
+                <p class="sin-vincular__estado" role="status" aria-live="polite">Cargando los socios sin vincular…</p>
+            }
+            else if (_problem is not null)
+            {
+                <ErrorNotice Problem="_problem" OnRetry="CargarAsync" />
+            }
+            else if (_miembros.Count == 0)
+            {
+                @* Nothing pending is the good outcome, not a failure: neutral tone
+                   (DESIGN-SYSTEM §11.2). *@
+                <p class="sin-vincular__vacio">
+                    No hay socios sin vincular. Todos tienen su código de cliente del POS.
+                </p>
+            }
+            else
+            {
+                <p class="sin-vincular__cuenta">@Cuenta</p>
+
+                @* role="table" and friends are explicit: at narrow width these cells become
+                   display:block, which drops the implicit table semantics (DESIGN-SYSTEM §10.1). *@
+                <table class="sin-vincular__tabla" role="table">
+                    <caption class="visually-hidden">
+                        Socios sin código de cliente del POS, del que hace más tiempo que espera al más reciente.
+                    </caption>
+                    <thead role="rowgroup">
+                        <tr role="row">
+                            <th scope="col" role="columnheader">Socio</th>
+                            <th scope="col" role="columnheader">N.º de socio</th>
+                            <th scope="col" role="columnheader">Fecha de alta</th>
+                            <th scope="col" role="columnheader">Esperando</th>
+                            <th scope="col" role="columnheader"><span class="visually-hidden">Acción</span></th>
+                        </tr>
+                    </thead>
+                    <tbody role="rowgroup">
+                        @foreach (var miembro in _miembros)
+                        {
+                            var id = miembro.Id;
+                            <tr role="row">
+                                <td role="cell" data-etiqueta="Socio">@miembro.Nombre</td>
+                                <td role="cell" data-etiqueta="N.º de socio">
+                                    @(string.IsNullOrEmpty(miembro.NumeroSocio) ? "—" : miembro.NumeroSocio)
+                                </td>
+                                <td role="cell" data-etiqueta="Fecha de alta">@FechaFormatter.Corta(miembro.FechaAlta)</td>
+                                <td role="cell" data-etiqueta="Esperando">@EsperaFormatter.Espera(miembro.FechaAlta, Hoy)</td>
+                                <td role="cell" class="sin-vincular__col-accion">
+                                    @* The name is in the accessible name, not only in the row:
+                                       a screen reader reading the button alone must know who. *@
+                                    <button
+                                        type="button"
+                                        class="btn btn--secondary sin-vincular__vincular"
+                                        aria-label="Vincular a @miembro.Nombre"
+                                        @ref="_botones[id]"
+                                        @onclick="() => Elegir(miembro)">
+                                        Vincular
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+
+            <div class="sin-vincular__acciones">
+                <button type="button" class="btn btn--secondary" disabled="@_cargando" @onclick="RecargarAsync">
+                    Actualizar lista
+                </button>
+                <a class="sin-vincular__volver" href="/"><span aria-hidden="true">←</span> Volver a la búsqueda</a>
+            </div>
+        }
+    </div>
+
+    @if (_elegido is { } elegido)
+    {
+        <VincularSocioDialog
+            @ref="_dialogo"
+            MiembroId="elegido.Id"
+            Nombre="elegido.Nombre"
+            OnVinculado="AlVincular"
+            OnListaDesactualizada="RecargarAsync"
+            OnCerrado="AlCerrarDialogo" />
+    }
+}
+
+@code {
+    private static DateOnly Hoy => DateOnly.FromDateTime(DateTime.Now);
+
+    private readonly List<MiembroSinVincularResponse> _miembros = [];
+
+    /// <summary>One entry per rendered row, so focus goes back to the button that opened the
+    /// dialog when it closes with nothing linked (DESIGN-SYSTEM §9.2).</summary>
+    private readonly Dictionary<int, ElementReference> _botones = [];
+
+    private VincularSocioDialog? _dialogo;
+    private MiembroSinVincularResponse? _elegido;
+    private VinculacionClienteExternoResponse? _exito;
+    private ApiProblem? _problem;
+    private bool _cargando;
+    private bool _sinPermiso;
+    private string _mensajeSinPermiso = string.Empty;
+
+    private ElementReference _titulo;
+    private ElementReference _exitoRef;
+    private bool _abrirDialogo;
+    private bool _focoAlExito;
+    private bool _focoAlTitulo;
+    private int? _focoAlBotonDe;
+
+    private CancellationTokenSource? _cts;
+
+    private string Cuenta => _miembros.Count == 1
+        ? "1 socio esperando su código."
+        : $"{_miembros.Count} socios esperando su código.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!SessionService.IsAuthenticated || !Autorizado)
+        {
+            return;
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        // A second load cancels the first: a late response must not overwrite the list on screen.
+        _cts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _cts = cts;
+
+        _cargando = true;
+        _problem = null;
+        _sinPermiso = false;
+        StateHasChanged();
+
+        var respuesta = await ApiClient.GetAsync<List<MiembroSinVincularResponse>>(
+            "api/miembros/sin-vincular", cts.Token);
+
+        if (cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        _cargando = false;
+
+        if (respuesta.Success)
+        {
+            _miembros.Clear();
+            _miembros.AddRange(respuesta.Value);
+            _botones.Clear();
+        }
+        else if (respuesta.Problem!.StatusCode == HttpStatusCode.Forbidden)
+        {
+            _sinPermiso = true;
+            _mensajeSinPermiso = respuesta.Problem.Message;
+        }
+        else
+        {
+            _problem = respuesta.Problem;
+        }
+
+        StateHasChanged();
+    }
+
+    /// <summary>The manual refresh, and the one the dialog asks for when the list went stale.</summary>
+    private async Task RecargarAsync()
+    {
+        _exito = null;
+        _focoAlTitulo = true;
+        await CargarAsync();
+    }
+
+    private void Elegir(MiembroSinVincularResponse miembro)
+    {
+        // Opened on the next render, once the dialog carries this member's id and name.
+        _elegido = miembro;
+        _abrirDialogo = true;
+    }
+
+    private void AlVincular(VinculacionClienteExternoResponse respuesta)
+    {
+        // The row leaves the list without a reload: the server already told us how it ended.
+        _miembros.RemoveAll(m => m.Id == respuesta.MiembroId);
+        _botones.Remove(respuesta.MiembroId);
+        _exito = respuesta;
+        _focoAlExito = true;
+        _problem = null;
+    }
+
+    private void AlCerrarDialogo()
+    {
+        // After a successful link the row is gone, and the success message takes focus instead.
+        if (_elegido is { } elegido && _miembros.Exists(m => m.Id == elegido.Id))
+        {
+            _focoAlBotonDe = elegido.Id;
+            StateHasChanged();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_abrirDialogo && _dialogo is not null)
+        {
+            _abrirDialogo = false;
+            await _dialogo.AbrirAsync();
+            return;
+        }
+
+        if (_focoAlExito)
+        {
+            _focoAlExito = false;
+            _focoAlBotonDe = null;
+            await _exitoRef.FocusAsync();
+        }
+        else if (_focoAlTitulo)
+        {
+            _focoAlTitulo = false;
+            _focoAlBotonDe = null;
+            await _titulo.FocusAsync();
+        }
+        else if (_focoAlBotonDe is { } id && _botones.TryGetValue(id, out var boton))
+        {
+            _focoAlBotonDe = null;
+            await boton.FocusAsync();
+        }
+    }
+
+    public override void Dispose()
+    {
+        _cts?.Cancel();
+        base.Dispose();
+    }
+}

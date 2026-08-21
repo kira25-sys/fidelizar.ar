@@ -4,14 +4,14 @@ using Microsoft.AspNetCore.Components;
 namespace Fidelizar.Client.Pages;
 
 /// <summary>
-/// Session and role plumbing shared by the two back-office member screens, S6 Ficha completa and
-/// S7 Historial de movimientos (FUNCTIONAL-SPEC §3: Encargada and Dueño, never Cajero).
+/// Session and role plumbing shared by the back-office screens — S6 Ficha completa, S7 Historial
+/// de movimientos and S9 Cierre diario (FUNCTIONAL-SPEC §3: Encargada and Dueño, never Cajero).
 ///
 /// <para><b><see cref="Autorizado"/> is presentation, never protection.</b> It exists so a
 /// <c>Cajero</c> who types the URL reads a Spanish explanation instead of watching a request
-/// fail, and so the screen does not fire a call it already knows will be refused. Both endpoints
-/// carry <c>[Authorize(Policy = EncargadaOrAbove)]</c> server-side and answer <c>403</c>
-/// regardless of what this property returns — which is why both pages still handle that
+/// fail, and so the screen does not fire a call it already knows will be refused. Every one of
+/// those endpoints carries <c>[Authorize(Policy = EncargadaOrAbove)]</c> server-side and answers <c>403</c>
+/// regardless of what this property returns — which is why every page still handles that
 /// <c>403</c> on the way back.</para>
 /// </summary>
 public abstract class BackOfficePageBase : ComponentBase, IDisposable

@@ -18,13 +18,15 @@
 .app-header__session {
   display: flex;
   align-items: center;
+  /* Two links, a name and a button no longer fit one line on a phone. */
+  flex-wrap: wrap;
   gap: var(--space-3);
   color: var(--color-text-muted);
 }
 
-/* S10's entry point, for a Dueño only. Sized like any other control so it is not a 20px target
-   in the corner of the header (DESIGN-SYSTEM §7). */
-.app-header__admin {
+/* The back-office entry points (S9, S10). Sized like any other control so neither is a 20px
+   target in the corner of the header (DESIGN-SYSTEM §7). */
+.app-header__enlace {
   display: inline-flex;
   align-items: center;
   min-height: var(--control-size-min);
@@ -35,7 +37,7 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .app-header__admin:hover {
+  .app-header__enlace:hover {
     background: var(--color-surface-sunken);
   }
 }

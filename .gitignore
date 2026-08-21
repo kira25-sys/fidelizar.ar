@@ -77,3 +77,7 @@ coverage/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# Agent worktrees: each one is a full clone of the repo, and a `git add -A` picks them up as
+# embedded submodules. Nothing under here belongs in a commit.
+.claude/worktrees/

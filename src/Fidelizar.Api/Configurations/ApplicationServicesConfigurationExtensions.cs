@@ -25,6 +25,7 @@ public static class ApplicationServicesConfigurationExtensions
         services.AddScoped<ISucursalService, SucursalService>();
         services.AddScoped<IAltaMiembroService, AltaMiembroService>();
         services.AddScoped<IConsentimientoTextoService, ConsentimientoTextoService>();
+        services.AddScoped<IVinculacionMiembroService, VinculacionMiembroService>();
 
         return services;
     }

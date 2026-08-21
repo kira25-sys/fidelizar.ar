@@ -1,9 +1,12 @@
 using Fidelizar.Api.Configurations;
 using Fidelizar.Api.Middleware;
+using Fidelizar.Api.Monitoreo;
+using Fidelizar.Api.Options;
 using Fidelizar.Infrastructure.Configurations;
 using Fidelizar.Infrastructure.Persistence;
 using Fidelizar.Shared.Errors;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 namespace Fidelizar.Api;
@@ -24,10 +27,14 @@ public class Program
 
             var builder = WebApplication.CreateBuilder(args);
 
+            // ARCHITECTURE §14: the log enricher that stamps NegocioId on every line reads the
+            // ambient HttpContext, which ASP.NET Core only publishes when this is registered.
+            builder.Services.AddHttpContextAccessor();
+
             // One Add*Configuration extension per concern (ARCHITECTURE §15), so Program.cs
             // stays a table of contents rather than a wall of setup code.
             builder.AddSerilogConfiguration();
-            builder.Services.AddAppHealthChecks();
+            builder.Services.AddAppHealthChecks(builder.Configuration);
             builder.Services.AddAppRateLimiting(builder.Configuration);
             builder.Services.AddInfrastructureConfiguration(builder.Configuration);
             builder.Services.AddApplicationServices();
@@ -64,7 +71,9 @@ public class Program
                 Log.Information("Migraciones de EF Core aplicadas");
             }
 
-            app.UseSerilogRequestLogging();
+            // ARCHITECTURE §14 / CLAUDE.md: see ConfigurarRequestLogging — the query string of a
+            // member search never reaches the logged path.
+            app.UseSerilogRequestLogging(LoggingConfigurationExtensions.ConfigurarRequestLogging);
 
             if (app.Environment.IsProduction())
             {
@@ -90,8 +99,19 @@ public class Program
             app.UseAuthorization();
 
             app.MapControllers();
-            // F1-04: a monitoring probe carries no session, so the fallback policy would otherwise reject it with 401.
-            app.MapHealthChecks("/health").AllowAnonymous();
+
+            // ARCHITECTURE §14: the external uptime check per instance. Two probes, because
+            // "the process is alive" and "the database answers" fail for different reasons and
+            // need different reactions — /health/live stays 200 while Postgres is down, which is
+            // what separates a dead host from a dead database on the owner's phone.
+            //
+            // /health keeps answering liveness so an already-configured monitor does not break.
+            // F1-04: a monitoring probe carries no session, so the fallback policy would
+            // otherwise reject all three with 401.
+            var instancia = app.Services.GetRequiredService<IOptions<MonitoreoSettings>>().Value.Instancia;
+            app.MapHealthChecks("/health", OpcionesDeSalud.Vivo(instancia)).AllowAnonymous();
+            app.MapHealthChecks("/health/live", OpcionesDeSalud.Vivo(instancia)).AllowAnonymous();
+            app.MapHealthChecks("/health/ready", OpcionesDeSalud.Listo(instancia)).AllowAnonymous();
 
             // ARCHITECTURE §3 "One deployable unit": Api serves the compiled WebAssembly client
             // from the same origin, so there is one container, one port and no CORS. The client's

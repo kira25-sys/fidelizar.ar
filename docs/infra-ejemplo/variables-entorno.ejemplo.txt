@@ -40,6 +40,25 @@ Jwt__SigningKey=CAMBIAR_ESTO
 # Jwt__AccessTokenMinutes=15
 
 # ---------------------------------------------------------------------------
+# Monitoring and logs (ROADMAP F1-18, docs/OPERACION-MONITOREO.md)
+# ---------------------------------------------------------------------------
+#
+# None of these is a secret: they are the identity and the retention of one deployment.
+# Set Instancia on every deployment — the default is "sin-configurar" on purpose, so an alert
+# that reads it is itself a bug report.
+Monitoreo__Instancia=CAMBIAR_ESTO
+
+# Optional — defaults ship in appsettings.json if omitted.
+# Monitoreo__RutaArchivoLog=Logs/fidelizar-.log
+# Monitoreo__RetencionDias=31
+# Monitoreo__TamanoMaximoArchivoBytes=52428800
+
+# The credential of whatever service ends up sending the alert to a phone IS a secret, and the
+# decision of which service is still open (OPERACION-MONITOREO.md section 5). When it is taken,
+# it goes here as one more CAMBIAR_ESTO — never a real value in a file in this repository.
+# FIDELIZAR_ALERTAS_TOKEN=CAMBIAR_ESTO
+
+# ---------------------------------------------------------------------------
 # Notes
 # ---------------------------------------------------------------------------
 #

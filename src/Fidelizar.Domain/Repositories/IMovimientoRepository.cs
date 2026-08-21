@@ -43,9 +43,9 @@ public interface IMovimientoRepository
 
     /// <summary>
     /// The movement already recorded under this idempotency key, or null when none exists yet
-    /// (README decision #6, 2026-08-19). The redemption use case in Application calls this before
-    /// writing anything, so a lost-response retry with the same key can return the original
-    /// <c>Canje</c> instead of writing a second one.
+    /// (README decision #6, 2026-08-19). Every use case that writes on a client's POST — S4's
+    /// canje and S8's anulación — calls this before writing anything, so a lost-response retry
+    /// with the same key returns the original movement instead of writing a second one.
     /// </summary>
     Task<MovimientoCredito?> GetPorClaveIdempotenciaAsync(
         int negocioId, string claveIdempotencia, CancellationToken cancellationToken = default);

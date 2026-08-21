@@ -25,7 +25,7 @@ public class AnulacionMovimientoServiceTests
     {
         var servicio = CrearServicio(out _);
 
-        var request = new AnularMovimientoRequest(NegocioId, 999, "Corrección", UsuarioId, Hoy);
+        var request = new AnularMovimientoRequest(NegocioId, 999, "Corrección", UsuarioId, Hoy, "clave-inexistente");
 
         await Assert.ThrowsAsync<EntityNotFoundException>(() => servicio.AnularAsync(request));
     }
@@ -38,7 +38,7 @@ public class AnulacionMovimientoServiceTests
         var original = await repositorio.AppendAsync(MovimientoCredito.Crear(
             negocioId: 2, MiembroId, Hoy, DateTime.UtcNow, TipoMovimientoCredito.Canje, -300m, Hoy, motivo: "Canje"));
 
-        var request = new AnularMovimientoRequest(NegocioId, original.Id, "Corrección", UsuarioId, Hoy);
+        var request = new AnularMovimientoRequest(NegocioId, original.Id, "Corrección", UsuarioId, Hoy, "clave-otro-negocio");
 
         await Assert.ThrowsAsync<EntityNotFoundException>(() => servicio.AnularAsync(request));
     }
@@ -53,7 +53,7 @@ public class AnulacionMovimientoServiceTests
         var original = await repositorio.AppendAsync(MovimientoCredito.Crear(
             NegocioId, MiembroId, Hoy, DateTime.UtcNow, TipoMovimientoCredito.Canje, -300m, Hoy, motivo: "Canje"));
 
-        var request = new AnularMovimientoRequest(NegocioId, original.Id, motivo, UsuarioId, Hoy);
+        var request = new AnularMovimientoRequest(NegocioId, original.Id, motivo, UsuarioId, Hoy, "clave-sin-motivo");
 
         var ex = await Assert.ThrowsAsync<ValidationException>(() => servicio.AnularAsync(request));
         Assert.Equal("MOTIVO_REQUERIDO", ex.ErrorCode);
@@ -68,7 +68,7 @@ public class AnulacionMovimientoServiceTests
             NegocioId, MiembroId, Hoy, DateTime.UtcNow, TipoMovimientoCredito.Canje, -300m, Hoy, motivo: "Canje"));
 
         var ajuste = await servicio.AnularAsync(
-            new AnularMovimientoRequest(NegocioId, original.Id, "Canje registrado por error", UsuarioId, Hoy));
+            new AnularMovimientoRequest(NegocioId, original.Id, "Canje registrado por error", UsuarioId, Hoy, "clave-ajuste"));
 
         Assert.Equal(TipoMovimientoCredito.Ajuste, ajuste.Tipo);
         Assert.Equal(300m, ajuste.Monto);

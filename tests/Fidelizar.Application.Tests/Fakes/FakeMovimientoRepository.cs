@@ -64,7 +64,7 @@ public sealed class FakeMovimientoRepository : IMovimientoRepository
     /// Mirrors the real repository's contract exactly (<c>MovimientoRepository.AppendAsync</c>):
     /// a second insert under a <c>ClaveIdempotencia</c> already on record throws
     /// <see cref="ConflictException"/>, standing in for the database's unique partial index on
-    /// <c>(NegocioId, ClaveIdempotencia)</c> — so <c>SaldoServiceTests</c> can exercise the real
+    /// <c>(NegocioId, ClaveIdempotencia)</c> — so the Application tests can exercise the real
     /// lost-the-race path with no database at hand.
     /// </summary>
     public Task<MovimientoCredito> AppendAsync(MovimientoCredito movimiento, CancellationToken cancellationToken = default)
@@ -73,7 +73,7 @@ public sealed class FakeMovimientoRepository : IMovimientoRepository
             m => m.NegocioId == movimiento.NegocioId && m.ClaveIdempotencia == movimiento.ClaveIdempotencia))
         {
             throw new ConflictException(
-                "Ya existe un canje registrado con esta clave de idempotencia.",
+                "Ya existe un movimiento registrado con esta clave de idempotencia.",
                 "CLAVE_IDEMPOTENCIA_EN_USO");
         }
 

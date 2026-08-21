@@ -128,10 +128,8 @@
     /// ledger from it.</summary>
     [Parameter] public EventCallback<MovimientoResponse> OnAnulado { get; set; }
 
-    /// <summary>Fires when the outcome of the call is genuinely unknown (the connection dropped
-    /// with the request in flight). S7 reloads so the manager can see for herself whether the
-    /// Ajuste got written — this endpoint carries no idempotency key, so a blind retry is how a
-    /// movement gets voided twice.</summary>
+    /// <summary>Fires when the manager asks to see the ledger as it stands — after a dropped
+    /// connection, or when the row is already gone. S7 reloads the history.</summary>
     [Parameter] public EventCallback OnRevisarHistorial { get; set; }
 
     /// <summary>Fires when the dialog closes, whatever closed it — S7 returns focus to the
@@ -149,15 +147,16 @@
     private Banner? _banner;
     private bool _enviando;
 
-    // Set when the request went out and the answer never came back. Confirming again from this
-    // state could append a second Ajuste, so the button stays shut until the history is reloaded.
-    private bool _resultadoDesconocido;
+    // One key per void attempt, kept across a retry of the same values so a lost response
+    // cannot append a second Ajuste (openapi-fase1.yaml S8, README decision #6).
+    private string? _clave;
+    private (long MovimientoId, string Motivo)? _valoresDeLaClave;
 
     private bool _focoAlCancelar;
     private bool _focoAlBanner;
     private bool _focoAlMotivo;
 
-    private bool NoSePuedeConfirmar => _enviando || _resultadoDesconocido || Movimiento is null;
+    private bool NoSePuedeConfirmar => _enviando || Movimiento is null;
 
     private sealed record Banner(
         string Mensaje, string Tono, bool OfreceIngresar = false, bool OfreceRevisar = false);
@@ -170,7 +169,8 @@
         _errorMotivo = null;
         _banner = null;
         _enviando = false;
-        _resultadoDesconocido = false;
+        _clave = null;
+        _valoresDeLaClave = null;
         _focoAlCancelar = true;
 
         var modulo = await ObtenerModuloAsync();
@@ -238,8 +238,9 @@
         _banner = null;
         StateHasChanged();
 
+        var request = new AnularMovimientoRequest(motivo, ClaveParaEsteIntento(Movimiento!.Id, motivo));
         var resultado = await ApiClient.PostAsync<AnularMovimientoRequest, MovimientoResponse>(
-            $"api/movimientos/{Movimiento!.Id}/anular", new AnularMovimientoRequest(motivo));
+            $"api/movimientos/{Movimiento.Id}/anular", request);
 
         _enviando = false;
 
@@ -254,21 +255,42 @@
         MostrarBanner(resultado.Problem!);
     }
 
+    /// <summary>
+    /// A new key only when the values changed since the last attempt: identical values are a
+    /// retry and must reuse it, edited values would otherwise collide as
+    /// CLAVE_IDEMPOTENCIA_REUTILIZADA.
+    /// </summary>
+    private string ClaveParaEsteIntento(long movimientoId, string motivo)
+    {
+        var valores = (movimientoId, motivo);
+
+        if (_clave is null || _valoresDeLaClave != valores)
+        {
+            _clave = Guid.NewGuid().ToString();
+            _valoresDeLaClave = valores;
+        }
+
+        return _clave;
+    }
+
     /// <summary>Server rejections. The reason keeps every character typed — a failed request
     /// never empties a form (ARCHITECTURE §14).</summary>
     private void MostrarBanner(ApiProblem problem)
     {
-        // No idempotency key on this endpoint (openapi-fase1.yaml): when the connection drops we
-        // cannot tell "never arrived" from "arrived and the answer was lost", and guessing wrong
-        // in the retry direction writes a second Ajuste. So this state does not offer a retry.
-        _resultadoDesconocido = problem.IsOffline;
-
         _banner = problem switch
         {
+            // The key makes the retry safe: if the void did land, the server returns that same
+            // Ajuste instead of writing a second one (README decision #6, S8 2026-08-21).
             { IsOffline: true } => new Banner(
-                "Se cortó la conexión y no podemos confirmar si la anulación quedó registrada. " +
-                "Actualizá el historial y fijate si ya aparece el ajuste antes de volver a intentar.",
+                "Se cortó la conexión y no sabemos si la anulación llegó a registrarse. " +
+                "Podés volver a intentarlo: si ya había quedado registrada, no se duplica.",
                 "warning",
+                OfreceRevisar: true),
+
+            { ErrorCode: "CLAVE_IDEMPOTENCIA_REUTILIZADA" } => new Banner(
+                "Algo quedó desincronizado con este intento. Actualizá el historial y, si el " +
+                "ajuste no está, probá de nuevo.",
+                "danger",
                 OfreceRevisar: true),
 
             { ErrorCode: "MOTIVO_REQUERIDO" } => new Banner(
@@ -293,6 +315,13 @@
                 "No pudimos anular el movimiento. Lo que escribiste sigue acá — probá de nuevo.",
                 "danger"),
         };
+
+        // A reused key is a client bug, not a retry: start the next attempt with a fresh one.
+        if (problem.ErrorCode == "CLAVE_IDEMPOTENCIA_REUTILIZADA")
+        {
+            _clave = null;
+            _valoresDeLaClave = null;
+        }
 
         _focoAlBanner = true;
         StateHasChanged();

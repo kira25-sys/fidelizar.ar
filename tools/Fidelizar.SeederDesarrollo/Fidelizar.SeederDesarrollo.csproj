@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      No new NuGet package. Npgsql itself (NpgsqlConnectionStringBuilder, used to read the target
+      host/port/database out of the connection string without ever printing its password) already
+      arrives transitively through Fidelizar.Infrastructure's Npgsql.EntityFrameworkCore.PostgreSQL.
+    -->
+    <ProjectReference Include="..\..\src\Fidelizar.Domain\Fidelizar.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Fidelizar.Infrastructure\Fidelizar.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
